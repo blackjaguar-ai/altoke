@@ -12,7 +12,7 @@ import { canalSala } from "./portal";
 export type Contenido =
   | { t: "bid"; handle: string; amount: number; district?: string | null }
   | { t: "agent"; action: string; amount: number | null; text: string }
-  | { t: "state"; status: string; winner?: string; finalPrice?: number }
+  | { t: "state"; status: string; winner?: string; finalPrice?: number; closesAt?: number }
   | { t: "agent_typing" }
   | { t: "reaction"; emoji: string }
   | { t: "chat"; handle: string; body: string };
@@ -77,14 +77,36 @@ export function useSala(roomId: string, handle: string, district: string) {
     [eventos],
   );
 
-  const vendido = useMemo(() => {
+  // Un solo escaneo hacia atrás por el ÚLTIMO evento "state": es la fuente
+  // de verdad del estado actual (open -> closing -> sold, o closing -> open
+  // si nadie ofertó a tiempo). Escanear así evita que un "closing" viejo
+  // sobreviva visualmente después de un "sold" más reciente.
+  const estadoSala = useMemo(() => {
     for (let i = eventos.length - 1; i >= 0; i--) {
       const c = eventos[i].c;
-      if (c.t === "state" && c.status === "sold")
-        return { winner: c.winner, finalPrice: c.finalPrice };
+      if (c.t === "state") return c;
     }
     return null;
   }, [eventos]);
+
+  const vendido = useMemo(
+    () =>
+      estadoSala?.status === "sold"
+        ? { winner: estadoSala.winner, finalPrice: estadoSala.finalPrice }
+        : null,
+    [estadoSala],
+  );
+
+  // Countdown de cierre (HU-06). closesAt es un epoch ms server-truth: todas
+  // las pantallas calculan el mismo restante desde el mismo número, así que
+  // queda sincronizado sin necesitar un reloj compartido por socket.
+  const cierre = useMemo(
+    () =>
+      estadoSala?.status === "closing" && estadoSala.closesAt
+        ? { closesAt: estadoSala.closesAt }
+        : null,
+    [estadoSala],
+  );
 
   const ofertar = useCallback(
     async (amount: number): Promise<string | null> => {
@@ -144,6 +166,7 @@ export function useSala(roomId: string, handle: string, district: string) {
     status,
     maximoCanal,
     vendido,
+    cierre,
     ofertar,
     reaccionar,
     comentar,

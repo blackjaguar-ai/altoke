@@ -1,6 +1,7 @@
 "use client";
 
 import { use, useEffect, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { useSala, type EventoUI } from "@/lib/portal-client";
 
 const DISTRITOS = ["Surco", "Miraflores", "San Juan de Lurigancho", "Comas", "Callao", "Ate", "Los Olivos"];
@@ -15,6 +16,7 @@ interface RoomPublic {
   status: string;
   highest_bid: string;
   final_price: string | null;
+  closes_at: string | null;
 }
 
 export default function SalaPage({ params }: { params: Promise<{ id: string }> }) {
@@ -81,6 +83,8 @@ function Sala({ id, handle, distrito }: { id: string; handle: string; distrito: 
   const [error, setError] = useState<string | null>(null);
   const [enviando, setEnviando] = useState(false);
   const feedRef = useRef<HTMLDivElement>(null);
+  const searchParams = useSearchParams();
+  const esVendedor = searchParams.get("seller") === "1";
 
   const s = useSala(id, handle, distrito);
 
@@ -102,6 +106,14 @@ function Sala({ id, handle, distrito }: { id: string; handle: string; distrito: 
   const vendido = s.vendido ?? (room.status === "sold" ? { finalPrice: Number(room.final_price) } : null);
   const persistentes = s.eventos.filter((e) => !e.ephemeral && e.c.t !== "agent_typing");
   const reacciones = s.eventos.filter((e) => e.c.t === "reaction" && Date.now() - e.ts < 2500);
+
+  // Countdown de cierre: el canal en vivo (s.cierre) manda; si alguien recién
+  // entró y el historial de 50 mensajes no alcanzó a traer el anuncio, el
+  // poll de /api/rooms cubre el hueco. Mismo epoch ms en ambos casos - el
+  // countdown no se desincroniza aunque cambie la fuente.
+  const closesAt =
+    !vendido &&
+    (s.cierre?.closesAt ?? (room.status === "closing" && room.closes_at ? new Date(room.closes_at).getTime() : null));
 
   async function ofertar() {
     const n = Math.floor(Number(monto));
@@ -144,6 +156,12 @@ function Sala({ id, handle, distrito }: { id: string; handle: string; distrito: 
         </div>
 
         <Termometro maximo={maximo} lista={lista} />
+
+        {closesAt && <Countdown closesAt={closesAt} roomId={id} />}
+
+        {esVendedor && !vendido && (
+          <PanelVendedor roomId={id} status={room.status} />
+        )}
 
         <div className="mt-3 flex items-center gap-2 text-xs">
           <span className={`h-2 w-2 rounded-full ${s.status === "ready" ? "bg-loro" : "bg-naranja"}`} />
@@ -245,6 +263,86 @@ function Termometro({ maximo, lista }: { maximo: number; lista: number }) {
       <div className="mt-1 flex justify-between text-[10px] font-bold uppercase tracking-widest text-papel/40">
         <span>Arranque</span>
         <span>{Math.round(pct)}% del precio de lista</span>
+      </div>
+    </div>
+  );
+}
+
+/** Countdown de cierre (HU-06). Sincronizado en todas las pantallas porque
+ *  todas leen el mismo `closesAt` (epoch ms, server-truth) - no hay reloj
+ *  compartido por socket, solo aritmética contra el reloj de cada cliente. */
+function Countdown({ closesAt, roomId }: { closesAt: number; roomId: string }) {
+  const [restanteMs, setRestanteMs] = useState(() => closesAt - Date.now());
+  const disparado = useRef(false);
+
+  useEffect(() => {
+    disparado.current = false;
+    const t = setInterval(() => setRestanteMs(closesAt - Date.now()), 250);
+    return () => clearInterval(t);
+  }, [closesAt]);
+
+  useEffect(() => {
+    if (restanteMs > 0 || disparado.current) return;
+    disparado.current = true;
+    // Cualquier pestaña conectada puede disparar esto - es idempotente en
+    // el servidor (WHERE status = 'closing' AND closes_at <= now()), así
+    // que no importa si 10 clientes lo llaman al mismo segundo.
+    fetch(`/api/rooms/${roomId}/resolve`, { method: "POST" }).catch(() => {});
+  }, [restanteMs, roomId]);
+
+  const segundos = Math.max(0, Math.ceil(restanteMs / 1000));
+  const urgente = segundos <= 10;
+
+  return (
+    <div
+      className={`borde mt-3 flex items-center justify-between px-4 py-2 ${urgente ? "bg-fucsia" : "bg-naranja"} text-tinta`}
+    >
+      <span className="text-xs font-black uppercase tracking-widest">
+        {segundos > 0 ? "Cierra en" : "Cerrando…"}
+      </span>
+      <span className={`display text-3xl dura ${urgente ? "animate-pulse" : ""}`}>
+        {String(Math.floor(segundos / 60)).padStart(2, "0")}:{String(segundos % 60).padStart(2, "0")}
+      </span>
+    </div>
+  );
+}
+
+/** Control del vendedor. No requiere que el vendedor esté conectado al canal
+ *  (HU-10): es un disparo puntual, el agente toma la voz desde el servidor.
+ *  Acceso por `?seller=1` a propósito - Clerk para vendedores sigue en
+ *  colchón (F6); esto desbloquea la demo sin bloquear en auth. */
+function PanelVendedor({ roomId, status }: { roomId: string; status: string }) {
+  const [enviando, setEnviando] = useState<number | null>(null);
+
+  async function anunciarCierre(seconds: number) {
+    setEnviando(seconds);
+    try {
+      await fetch(`/api/rooms/${roomId}/close`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ seconds }),
+      });
+    } finally {
+      setEnviando(null);
+    }
+  }
+
+  if (status !== "open") return null;
+
+  return (
+    <div className="borde mt-3 flex items-center gap-2 bg-tinta px-3 py-2">
+      <span className="text-[10px] font-black uppercase tracking-widest text-amarillo">Panel vendedor</span>
+      <div className="ml-auto flex gap-1">
+        {[15, 30, 60].map((s) => (
+          <button
+            key={s}
+            disabled={enviando !== null}
+            onClick={() => anunciarCierre(s)}
+            className="borde bg-amarillo px-2 py-1 text-xs font-black text-tinta disabled:opacity-40"
+          >
+            {enviando === s ? "…" : `Cerrar ${s}s`}
+          </button>
+        ))}
       </div>
     </div>
   );
