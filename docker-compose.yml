@@ -35,17 +35,15 @@ services:
     # Puerto solo en loopback: nginx del host hace el proxy. Nada expuesto a internet.
     ports:
       - "127.0.0.1:3011:3000"
-    networks: [interna, web]
+    networks: [interna, escai-network]
 
 volumes:
   pgdata:
 
 networks:
   interna:
-  # Red compartida con el nginx de /opt/shared/web.
-  # Si tu nginx corre en Docker, esta red es como lo alcanzas:
-  #   docker network create web        (si aun no existe)
-  # y el proxy_pass apunta a http://altoke-app:3000
-  # Si tu nginx corre en el host, ignora esto y usa 127.0.0.1:3011.
-  web:
+  # La red del nginx compartido (contenedor escai-nginx). altoke-app se une
+  # aca para que nginx lo alcance por nombre: http://altoke-app:3000
+  # Ya existe - la crea el stack de escai-nginx, no la crees de nuevo aqui.
+  escai-network:
     external: true

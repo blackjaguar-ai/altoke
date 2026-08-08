@@ -7,6 +7,9 @@ FROM node:22-alpine AS build
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
+# El proyecto no tiene carpeta public/ (sin assets estaticos propios).
+# La garantizamos vacia para que el COPY de la etapa run no falle.
+RUN mkdir -p public
 RUN npm run build
 
 FROM node:22-alpine AS run
