@@ -1,3 +1,7 @@
+Otro conflicto trivial — ambos lados dicen exactamente lo mismo (external: true), solo Git no pudo fusionarlo automáticamente porque venía de dos commits distintos con el mismo cambio. Sobreescribe igual que el anterior:
+
+bash
+cat > docker-compose.yml <<'DEOF'
 name: altoke
 
 services:
