@@ -1,0 +1,51 @@
+name: altoke
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: altoke
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-altoke}
+      POSTGRES_DB: altoke
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./db:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U altoke"]
+      interval: 5s
+      retries: 12
+    networks: [interna]
+    # Publicado a loopback para desarrollo local (npm run dev fuera de Docker).
+    # En produccion `app` habla con `db` por la red interna; este mapeo no
+    # afecta eso, solo abre el puerto tambien al host.
+    ports:
+      - "127.0.0.1:5432:5432"
+
+  app:
+    build: .
+    container_name: altoke-app
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DATABASE_URL: postgres://altoke:${POSTGRES_PASSWORD:-altoke}@db:5432/altoke
+      NODE_ENV: production
+    depends_on:
+      db: { condition: service_healthy }
+    # Puerto solo en loopback: nginx del host hace el proxy. Nada expuesto a internet.
+    ports:
+      - "127.0.0.1:3011:3000"
+    networks: [interna, web]
+
+volumes:
+  pgdata:
+
+networks:
+  interna:
+  # Red compartida con el nginx de /opt/shared/web.
+  # Si tu nginx corre en Docker, esta red es como lo alcanzas:
+  #   docker network create web        (si aun no existe)
+  # y el proxy_pass apunta a http://altoke-app:3000
+  # Si tu nginx corre en el host, ignora esto y usa 127.0.0.1:3011.
+  web:
+    external: true
