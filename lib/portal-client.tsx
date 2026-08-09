@@ -3,6 +3,7 @@
 import { useCallback, useMemo } from "react";
 import { useChannel } from "@portalsdk/react";
 import { canalSala, canalTrato } from "./portal";
+import { mask } from "./mask";
 
 /**
  * Contenido del mensaje. `t` es el discriminador y vive DENTRO de `content` a
@@ -152,12 +153,18 @@ export function useSala(roomId: string, handle: string, district: string, role: 
     [send],
   );
 
-  // Mensaje de texto libre: ESTE sí lo publica el cliente, y por eso pasa por
-  // el middleware onPublish que enmascara DNI, celular y dirección.
+  // Mensaje de texto libre: pasa por el middleware onPublish server-side
+  // (portal.config.ts) que enmascara DNI/celular/dirección/tarjeta, PERO
+  // Portal pinta un eco optimista en la pantalla del propio remitente con
+  // el texto crudo ANTES de que el servidor lo procese - ese eco nunca se
+  // corrige con la versión filtrada. Fix: enmascarar acá, cliente, antes
+  // de mandar. Así el emisor jamás ve su propio dato sensible en pantalla,
+  // y lo que llega al servidor ya viene limpio (el middleware no encuentra
+  // nada que tocar - es idempotente sobre texto ya enmascarado).
   const comentar = useCallback(
     async (body: string) => {
       try {
-        await send({ content: { t: "chat", handle, body } });
+        await send({ content: { t: "chat", handle, body: mask(body).text } });
         return null;
       } catch (e: any) {
         return e?.reason ?? "No se pudo enviar el mensaje.";
@@ -210,10 +217,11 @@ export function useTrato(roomId: string, winnerHandle: string, myHandle: string)
     [messages],
   );
 
-  // Mismo canal que usa la moderación de datos (protegerDatos en
-  // portal.config.ts) - por eso SÍ conviene coordinar Yape/Plin acá: si
-  // alguien pega su número o DNI por error, se enmascara igual que en la
-  // sala pública, no queda expuesto en texto plano.
+  // Canal PRIVADO: a propósito NO se enmascara acá. HU-09 es explícito -
+  // "los datos se liberan SOLO en el canal privado post-cierre". Enmascarar
+  // acá también dejaría el chat de coordinación de entrega inservible: nadie
+  // podría pegar su Yape ni su celular. (Ver fix en portal.config.ts: el
+  // middleware protegerDatos ya NO corre sobre `trato-*`.)
   const comentar = useCallback(
     async (body: string) => {
       try {

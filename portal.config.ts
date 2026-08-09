@@ -58,7 +58,11 @@ export default defineConfig({
     // Salas públicas: cualquiera entra sin registrarse. Es la regla dura del
     // producto — si el jurado tiene que crear cuenta, pierdes la demo.
     "sala-*": { anonymous: true, onPublish: [protegerDatos] },
-    // Canal privado post-cierre entre vendedor y comprador ganador.
-    "trato-*": { anonymous: true, onPublish: [protegerDatos] },
+    // Canal privado post-cierre entre vendedor y comprador ganador. SIN
+    // protegerDatos a propósito: HU-09 pide que los datos se liberen SOLO
+    // acá. Si se enmascarara igual que la sala pública, nadie podría pegar
+    // su Yape/celular para coordinar la entrega - el canal quedaría inútil
+    // para el único fin por el que existe.
+    "trato-*": { anonymous: true },
   },
 });
