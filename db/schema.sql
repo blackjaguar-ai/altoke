@@ -61,3 +61,16 @@ CREATE TABLE IF NOT EXISTS interests (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   PRIMARY KEY (room_id, handle)
 );
+
+-- Etapa "subir producto" — múltiples fotos por sala, en orden, para el
+-- carrusel. `photo_url` en `rooms` se mantiene para las salas de prueba ya
+-- sembradas a mano (nunca tuvieron fila acá) - el carrusel cae de vuelta a
+-- esa columna si esta tabla está vacía para esa sala.
+CREATE TABLE IF NOT EXISTS room_photos (
+  id         BIGSERIAL PRIMARY KEY,
+  room_id    TEXT NOT NULL REFERENCES rooms(id) ON DELETE CASCADE,
+  url        TEXT NOT NULL,
+  position   INT NOT NULL DEFAULT 0,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS room_photos_room_idx ON room_photos(room_id, position);
