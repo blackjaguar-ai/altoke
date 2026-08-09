@@ -12,6 +12,7 @@ interface RoomPublic {
   product_name: string;
   product_desc: string | null;
   photo_url: string | null;
+  photos: string[];
   list_price: string;
   status: string;
   highest_bid: string;
@@ -154,11 +155,8 @@ function Sala({ id, handle, distrito, esVendedor }: { id: string; handle: string
   return (
     <main className="mx-auto flex min-h-dvh max-w-lg flex-col">
       <header className="border-b-4 border-amarillo p-4">
-        <div className="flex items-center gap-3">
-          {room.photo_url && (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={room.photo_url} alt={room.product_name} className="borde h-20 w-20 object-cover" />
-          )}
+        {room.photos.length > 0 && <Carrusel fotos={room.photos} alt={room.product_name} />}
+        <div className="mt-3 flex items-center gap-3">
           <div className="min-w-0">
             <h1 className="display truncate text-2xl text-amarillo dura">{room.product_name}</h1>
             <p className="truncate text-xs text-papel/60">{room.product_desc}</p>
@@ -357,6 +355,47 @@ function Interes({ roomId, handle }: { roomId: string; handle: string }) {
 
 /** SIGNATURE: el termómetro. La tesis del producto hecha píxeles.
  *  El piso NO está en la escala: no existe para el cliente. */
+/** Carrusel simple: botones prev/next + puntos. Sin librería de swipe -
+ *  suficiente para 1-6 fotos, que es el tope que permite el endpoint de
+ *  subida. Si solo hay una foto, no pinta flechas ni puntos. */
+function Carrusel({ fotos, alt }: { fotos: string[]; alt: string }) {
+  const [i, setI] = useState(0);
+  const actual = Math.min(i, fotos.length - 1);
+
+  return (
+    <div className="relative">
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src={fotos[actual]} alt={alt} className="borde h-48 w-full object-cover" />
+      {fotos.length > 1 && (
+        <>
+          <button
+            onClick={() => setI((n) => (n - 1 + fotos.length) % fotos.length)}
+            className="absolute left-2 top-1/2 -translate-y-1/2 grid h-8 w-8 place-items-center rounded-full bg-tinta/70 text-papel"
+            aria-label="Foto anterior"
+          >
+            ‹
+          </button>
+          <button
+            onClick={() => setI((n) => (n + 1) % fotos.length)}
+            className="absolute right-2 top-1/2 -translate-y-1/2 grid h-8 w-8 place-items-center rounded-full bg-tinta/70 text-papel"
+            aria-label="Foto siguiente"
+          >
+            ›
+          </button>
+          <div className="absolute bottom-2 left-1/2 flex -translate-x-1/2 gap-1">
+            {fotos.map((_, idx) => (
+              <span
+                key={idx}
+                className={`h-1.5 w-1.5 rounded-full ${idx === actual ? "bg-amarillo" : "bg-papel/40"}`}
+              />
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 function Termometro({ maximo, lista }: { maximo: number; lista: number }) {
   const pct = lista > 0 ? Math.min(100, (maximo / lista) * 100) : 0;
   return (

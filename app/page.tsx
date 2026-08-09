@@ -1,4 +1,5 @@
 import { q } from "@/lib/db";
+import Link from "next/link";
 import { SalasEnVivo, type SalaCard, type VentaCard } from "./SalasEnVivo";
 
 export const dynamic = "force-dynamic";
@@ -29,6 +30,13 @@ export default async function Home() {
         El vendedor pone su precio piso en privado. Su agente negocia en público,
         frente a todos los compradores a la vez. Sin inbox, sin una semana de espera.
       </p>
+
+      <Link
+        href="/crear"
+        className="borde mt-4 inline-block bg-amarillo px-5 py-3 display text-lg text-tinta"
+      >
+        Vender algo →
+      </Link>
 
       <h2 className="mt-10 display text-sm tracking-widest text-papel/50">
         Salas abiertas ahora

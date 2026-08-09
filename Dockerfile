@@ -24,5 +24,11 @@ ENV HOSTNAME="0.0.0.0"
 COPY --from=build /app/public ./public
 COPY --from=build /app/.next/standalone ./
 COPY --from=build /app/.next/static ./.next/static
+# Directorio donde vive el volumen `uploads` (docker-compose.yml). Se crea
+# acá para que exista con el owner correcto antes de que el volumen se
+# monte encima - Docker lo crea igual si falta, pero como root, y el
+# proceso Node corre como el user por defecto de la imagen; mejor no
+# depender de esa carrera.
+RUN mkdir -p uploads
 EXPOSE 3000
 CMD ["node","server.js"]

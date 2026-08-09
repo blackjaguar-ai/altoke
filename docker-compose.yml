@@ -37,8 +37,16 @@ services:
     ports:
       - "127.0.0.1:3011:3000"
     networks: [interna, escai-network]
+    # Fotos de producto subidas por el vendedor. Volumen aparte, NO
+    # public/: ese folder se hornea en el build (docker build --target
+    # build lo copia una sola vez); cualquier archivo escrito ahí en
+    # runtime se pierde en el próximo `docker compose up --build`. Este
+    # volumen sí persiste entre rebuilds, igual que pgdata para Postgres.
+    volumes:
+      - uploads:/app/uploads
 
 volumes:
+  uploads:
   pgdata:
 
 networks:

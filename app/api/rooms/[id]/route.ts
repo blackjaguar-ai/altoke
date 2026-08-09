@@ -1,4 +1,4 @@
-import { one } from "@/lib/db";
+import { one, q } from "@/lib/db";
 export const dynamic = "force-dynamic";
 
 /**
@@ -16,5 +16,14 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
     [id]
   );
   if (!room) return Response.json({ error: "not_found" }, { status: 404 });
-  return Response.json(room);
+
+  // Carrusel: room_photos si el vendedor subió fotos por /crear, si no
+  // cae de vuelta al photo_url único de las salas sembradas a mano.
+  const fotos = await q<{ url: string }>(
+    `select url from room_photos where room_id = $1 order by position asc`,
+    [id],
+  );
+  const photos = fotos.length > 0 ? fotos.map((f) => f.url) : room.photo_url ? [room.photo_url] : [];
+
+  return Response.json({ ...room, photos });
 }

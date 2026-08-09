@@ -83,7 +83,7 @@ export async function POST(req: Request) {
 
     const room = (
       await client.query(
-        `select id, list_price, floor_price, agent_tone, status,
+        `select id, product_name, product_desc, list_price, floor_price, agent_tone, status,
                 highest_bid, counter_count, closes_at
            from rooms where id = $1
           for update`, // lock de fila: serializa ofertas concurrentes en la misma sala
@@ -176,7 +176,10 @@ export async function POST(req: Request) {
     // transaccion: nunca sostener un lock de fila esperando a OpenAI.
     // ============================================================
     const tLlm = Date.now();
-    const text = await draft(decision, room.agent_tone);
+    const text = await draft(decision, room.agent_tone, {
+      name: room.product_name,
+      desc: room.product_desc,
+    });
     const latency = Date.now() - tLlm;
 
     // ============================================================
