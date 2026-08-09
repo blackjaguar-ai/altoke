@@ -3,6 +3,7 @@ CREATE TABLE IF NOT EXISTS rooms (
   product_name  TEXT NOT NULL,
   product_desc  TEXT,
   photo_url     TEXT,
+  category      TEXT NOT NULL DEFAULT 'otros', -- vehiculos|tecnologia|hogar|moda|otros
   list_price    NUMERIC(10,2) NOT NULL,
   floor_price   NUMERIC(10,2) NOT NULL,   -- SECRETO. Jamás sale en un payload al cliente.
   agent_tone    TEXT NOT NULL DEFAULT 'firme pero amable, criollo',
@@ -16,6 +17,10 @@ CREATE TABLE IF NOT EXISTS rooms (
   closes_at     TIMESTAMPTZ,
   created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+-- Para bases ya existentes: CREATE TABLE IF NOT EXISTS no altera una tabla
+-- que ya existe, así que esto es lo que de verdad agrega la columna en tu
+-- VPS. Seguro de correr repetido.
+ALTER TABLE rooms ADD COLUMN IF NOT EXISTS category TEXT NOT NULL DEFAULT 'otros';
 
 CREATE TABLE IF NOT EXISTS bids (
   id           BIGSERIAL PRIMARY KEY,

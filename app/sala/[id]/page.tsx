@@ -1,11 +1,24 @@
 "use client";
 
-import { use, useEffect, useRef, useState } from "react";
+import { use, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useSala, useTrato, type EventoUI } from "@/lib/portal-client";
+import {
+  AuctionRoom,
+  type Room,
+  type Bid,
+  type ChatMsg,
+  type Reaction,
+  type Seller,
+} from "@/components/altoke/auction-room";
 
 const DISTRITOS = ["Surco", "Miraflores", "San Juan de Lurigancho", "Comas", "Callao", "Ate", "Los Olivos"];
 const EMOJIS = ["🔥", "😱", "💸", "👏"];
+// Único fallback cuando una sala no tiene ni room_photos ni photo_url -
+// Room.photoUrl en el componente de v0 es obligatorio (string, no
+// string|null), así que necesita algo que renderizar sí o sí.
+const FOTO_VACIA =
+  "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='400' height='400'><rect width='400' height='400' fill='%23232733'/></svg>";
 
 interface RoomPublic {
   id: string;
@@ -13,6 +26,7 @@ interface RoomPublic {
   product_desc: string | null;
   photo_url: string | null;
   photos: string[];
+  category: string;
   list_price: string;
   status: string;
   highest_bid: string;
@@ -39,7 +53,7 @@ export default function SalaPage({ params }: { params: Promise<{ id: string }> }
   // El vendedor NO pasa por la entrada de comprador: no elige distrito, no
   // ocupa un cupo de "negociando ahora". Se conecta directo con un handle
   // fijo y `role: "seller"` en la metadata del canal (ver lib/portal-client).
-  if (esVendedor) return <Sala id={id} handle="Vendedor" distrito="" esVendedor />;
+  if (esVendedor) return <SalaVendedor id={id} />;
 
   if (!entrado)
     return (
@@ -49,7 +63,7 @@ export default function SalaPage({ params }: { params: Promise<{ id: string }> }
         onEntrar={() => { localStorage.setItem("altoke.handle", handle.trim()); setEntrado(true); }}
       />
     );
-  return <Sala id={id} handle={handle.trim()} distrito={distrito} esVendedor={false} />;
+  return <SalaComprador id={id} handle={handle.trim()} distrito={distrito} />;
 }
 
 function Entrada(p: {
@@ -87,15 +101,236 @@ function Entrada(p: {
   );
 }
 
-function Sala({ id, handle, distrito, esVendedor }: { id: string; handle: string; distrito: string; esVendedor: boolean }) {
+/**
+ * ============================================================
+ * COMPRADOR — usa el componente nuevo de v0 (components/altoke/
+ * auction-room.tsx). Este archivo solo construye los datos exactos
+ * que ese componente pide (Room, Bid, ChatMsg, Reaction, Seller) a
+ * partir de lo que ya viene del hook real - AuctionRoom en sí mismo
+ * nunca se toca, sigue siendo el archivo tal como lo generó v0.
+ * ============================================================
+ */
+function SalaComprador({ id, handle, distrito }: { id: string; handle: string; distrito: string }) {
   const [room, setRoom] = useState<RoomPublic | null>(null);
-  const [monto, setMonto] = useState("");
-  const [texto, setTexto] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const [enviando, setEnviando] = useState(false);
-  const feedRef = useRef<HTMLDivElement>(null);
+  const [bidDraft, setBidDraft] = useState("");
+  const [messageDraft, setMessageDraft] = useState("");
+  const [panel, setPanel] = useState<"chat" | "bids">("chat");
+  const [toast, setToast] = useState<string | null>(null);
+  const [interesado, setInteresado] = useState(false);
+  const [cuentaInteres, setCuentaInteres] = useState(0);
 
-  const s = useSala(id, handle, distrito, esVendedor ? "seller" : "bidder");
+  const s = useSala(id, handle, distrito, "bidder");
+
+  useEffect(() => {
+    const cargar = () => fetch(`/api/rooms/${id}`).then((r) => r.json()).then(setRoom).catch(() => {});
+    cargar();
+    const t = setInterval(cargar, 15000);
+    return () => clearInterval(t);
+  }, [id]);
+
+  useEffect(() => {
+    fetch(`/api/rooms/${id}/interest?handle=${encodeURIComponent(handle)}`)
+      .then((r) => r.json())
+      .then((j) => { setInteresado(Boolean(j.interested)); setCuentaInteres(Number(j.count) || 0); })
+      .catch(() => {});
+  }, [id, handle]);
+
+  useEffect(() => {
+    if (!toast) return;
+    const t = setTimeout(() => setToast(null), 4000);
+    return () => clearTimeout(t);
+  }, [toast]);
+
+  const maximo = room ? Math.max(s.maximoCanal, Number(room.highest_bid)) : 0;
+
+  const vendido = useMemo(() => {
+    if (!room) return null;
+    return (
+      s.vendido ??
+      (room.status === "sold"
+        ? { finalPrice: Number(room.final_price), winner: room.winner_handle ?? undefined }
+        : null)
+    );
+  }, [s.vendido, room]);
+
+  const closesAt = useMemo(() => {
+    if (!room || vendido) return null;
+    return s.cierre?.closesAt ?? (room.status === "closing" && room.closes_at ? new Date(room.closes_at).getTime() : null);
+  }, [s.cierre, room, vendido]);
+
+  const bidsVM: Bid[] = useMemo(
+    () =>
+      s.eventos
+        .filter((e): e is EventoUI & { c: { t: "bid"; handle: string; amount: number; district?: string | null } } => e.c.t === "bid")
+        .map((e) => ({
+          id: e.id,
+          handle: e.c.handle,
+          amount: e.c.amount,
+          district: e.c.district ?? "",
+          createdAt: e.ts,
+          isLeader: e.c.amount === maximo,
+        }))
+        .reverse(), // más reciente primero - calza con visibleBids.slice(0,5) del componente
+    [s.eventos, maximo],
+  );
+
+  const messagesVM: ChatMsg[] = useMemo(
+    () =>
+      s.eventos
+        .filter((e) => e.c.t === "chat" || e.c.t === "agent")
+        .map((e) => {
+          if (e.c.t === "agent") {
+            return { id: e.id, handle: "Agente del vendedor", text: e.c.text, role: "agent" as const, createdAt: e.ts };
+          }
+          const c = e.c as { handle: string; body: string };
+          return { id: e.id, handle: c.handle, text: c.body, role: "buyer" as const, createdAt: e.ts };
+        }),
+    [s.eventos],
+  );
+
+  // handle vacío a propósito: el componente nunca renderiza reaction.handle
+  // (confirmado leyendo auction-room.tsx - solo pinta el emoji), así que no
+  // vale la pena tocar el hook para rastrear quién mandó cada reacción.
+  const reactionsVM: Reaction[] = s.reacciones.map((r) => ({ id: r.id, emoji: r.emoji, handle: "" }));
+
+  const ganadorHandle = vendido?.winner;
+  const soyGanador = Boolean(ganadorHandle) && handle === ganadorHandle;
+
+  async function onBid() {
+    const n = Math.floor(Number(bidDraft));
+    if (!Number.isFinite(n) || n <= 0) { setToast("Escribe un monto válido."); return; }
+    const err = await s.ofertar(n);
+    if (err) setToast(err); else setBidDraft("");
+  }
+
+  async function onSend() {
+    if (!messageDraft.trim()) return;
+    const err = await s.comentar(messageDraft.trim());
+    if (err) setToast(err); else setMessageDraft("");
+  }
+
+  async function onToggleInterest() {
+    const res = await fetch(`/api/rooms/${id}/interest`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ handle }),
+    });
+    const j = await res.json().catch(() => ({}));
+    setInteresado(Boolean(j.interested));
+    setCuentaInteres(Number(j.count) || 0);
+  }
+
+  function onShare() {
+    const url = typeof window !== "undefined" ? window.location.href : "";
+    if (typeof navigator === "undefined") return;
+    if (navigator.share) {
+      navigator.share({ title: room?.product_name, url }).catch(() => {});
+    } else if (navigator.clipboard) {
+      navigator.clipboard.writeText(url).then(() => setToast("Enlace copiado."));
+    }
+  }
+
+  if (!room) {
+    return (
+      <main className="grid min-h-dvh place-items-center bg-altoke-bg">
+        <p className="text-sm font-bold text-altoke-ink-soft">Cargando sala…</p>
+      </main>
+    );
+  }
+
+  // El comprador ganador ve el canal privado a pantalla completa, no
+  // superpuesto al AuctionRoom - la negociación ya terminó, no tiene
+  // sentido mostrar controles de oferta encima de eso (HU-05).
+  if (vendido && ganadorHandle && soyGanador) {
+    return (
+      <main className="mx-auto min-h-dvh max-w-lg bg-altoke-bg p-4">
+        <CanalPrivado
+          roomId={id}
+          winnerHandle={ganadorHandle}
+          myHandle={handle}
+          finalPrice={vendido.finalPrice ?? maximo}
+        />
+      </main>
+    );
+  }
+
+  const lista = Number(room.list_price);
+  const roomVM: Room = {
+    id: room.id,
+    productName: room.product_name,
+    photoUrl: room.photos[0] ?? FOTO_VACIA,
+    listPrice: lista,
+    highestBid: maximo || null,
+    category: (["vehiculos", "tecnologia", "hogar", "moda", "otros"] as const).includes(room.category as any)
+      ? (room.category as Room["category"])
+      : "otros",
+    status: vendido ? "sold" : ((room.status as Room["status"]) ?? "open"),
+    closesAt: closesAt ?? null,
+    finalPrice: vendido?.finalPrice ?? null,
+    bidderCount: s.cuantos,
+    spectatorCount: s.cuantosMirando,
+    district: bidsVM.find((b) => b.isLeader)?.district || distrito,
+    heat: lista > 0 ? Math.min(100, (maximo / lista) * 100) : 0,
+  };
+
+  const sellerVM: Seller = {
+    handle: "Vendedor",
+    isAgentRepresented: !s.vendedorConectado,
+  };
+
+  return (
+    <>
+      <AuctionRoom
+        room={roomVM}
+        seller={sellerVM}
+        bids={bidsVM}
+        messages={messagesVM}
+        reactions={reactionsVM}
+        myRole={s.rol === "spectator" ? "spectator" : "bidder"}
+        isInterested={interesado}
+        activePanel={panel}
+        bidDraft={bidDraft}
+        messageDraft={messageDraft}
+        onBid={onBid}
+        onSend={onSend}
+        onReact={(emoji) => s.reaccionar(emoji)}
+        onToggleRole={() => s.cambiarRol(s.rol === "spectator" ? "bidder" : "spectator")}
+        onToggleInterest={onToggleInterest}
+        onPanelChange={setPanel}
+        onBidDraftChange={(v) => { setBidDraft(v.replace(/\D/g, "")); s.sendTyping(); }}
+        onMessageDraftChange={(v) => { setMessageDraft(v); s.sendTyping(); }}
+        onShare={onShare}
+        onCollapse={() => {
+          // Sin spec visual de qué debería pasar al colapsar más allá del
+          // ícono en sí - no-op a propósito hasta que haya un diseño real
+          // para este estado. No inventar comportamiento no pedido.
+        }}
+      />
+      {toast && (
+        <div className="fixed inset-x-4 top-4 z-50 rounded-2xl bg-altoke-accent px-4 py-3 text-center text-sm font-bold text-white shadow-lg md:left-1/2 md:right-auto md:w-96 md:-translate-x-1/2">
+          {toast}
+        </div>
+      )}
+      {/* cuentaInteres no se muestra acá aparte: el corazón de AuctionRoom
+         ya refleja isInterested. Se queda en estado por si se necesita
+         mostrar el conteo en algún punto futuro. */}
+    </>
+  );
+}
+
+/**
+ * ============================================================
+ * VENDEDOR — se queda con la UI original ("afiche chicha"). No hay
+ * panel de vendedor en lo que generó v0 (el brief nunca lo pidió),
+ * así que no hay razón para tocar esto ni riesgo que correr acá.
+ * ============================================================
+ */
+function SalaVendedor({ id }: { id: string }) {
+  const [room, setRoom] = useState<RoomPublic | null>(null);
+  const feedRef = useRef<HTMLDivElement>(null);
+  const handle = "Vendedor";
+
+  const s = useSala(id, handle, "", "seller");
 
   useEffect(() => {
     const cargar = () => fetch(`/api/rooms/${id}`).then((r) => r.json()).then(setRoom).catch(() => {});
@@ -117,40 +352,12 @@ function Sala({ id, handle, distrito, esVendedor }: { id: string; handle: string
     (room.status === "sold"
       ? { finalPrice: Number(room.final_price), winner: room.winner_handle ?? undefined }
       : null);
-  // Ya no hay "agent_typing" ni "reaction" en s.eventos - ambos vivían en
-  // mensajes ephemeral que el SDK nunca entregaba (ver nota en
-  // lib/portal-client.tsx). eventos ahora solo trae contenido persistente,
-  // así que ya no hace falta filtrar nada acá.
   const persistentes = s.eventos;
-
-  // Quién puede ver el canal privado (HU-05): el vendedor siempre, y el
-  // comprador SOLO si su handle coincide con el que ganó. Nadie más - ni
-  // siquiera otro comprador que perdió la puja puede espiar la coordinación.
   const ganadorHandle = vendido?.winner;
-  const soyGanador = !esVendedor && Boolean(ganadorHandle) && handle === ganadorHandle;
 
-  // Countdown de cierre: el canal en vivo (s.cierre) manda; si alguien recién
-  // entró y el historial de 50 mensajes no alcanzó a traer el anuncio, el
-  // poll de /api/rooms cubre el hueco. Mismo epoch ms en ambos casos - el
-  // countdown no se desincroniza aunque cambie la fuente.
   const closesAt =
     !vendido &&
     (s.cierre?.closesAt ?? (room.status === "closing" && room.closes_at ? new Date(room.closes_at).getTime() : null));
-
-  async function ofertar() {
-    const n = Math.floor(Number(monto));
-    if (!Number.isFinite(n) || n <= 0) return setError("Escribe un monto válido.");
-    setEnviando(true); setError(null);
-    const err = await s.ofertar(n);
-    setEnviando(false);
-    if (err) setError(err); else setMonto("");
-  }
-
-  async function comentar() {
-    if (!texto.trim()) return;
-    const err = await s.comentar(texto.trim());
-    if (err) setError(err); else setTexto("");
-  }
 
   return (
     <main className="mx-auto flex min-h-dvh max-w-lg flex-col">
@@ -178,20 +385,13 @@ function Sala({ id, handle, distrito, esVendedor }: { id: string; handle: string
 
         {closesAt && <Countdown closesAt={closesAt} roomId={id} />}
 
-        {esVendedor && !vendido && (
-          <PanelVendedor roomId={id} status={room.status} />
-        )}
+        {!vendido && <PanelVendedor roomId={id} status={room.status} />}
 
         <div className="mt-3 flex items-center gap-2 text-xs">
           <span className={`h-2 w-2 rounded-full ${s.status === "ready" ? "bg-loro" : "bg-naranja"}`} />
           <span className="font-bold text-papel/70">
             {s.cuantos} negociando{s.cuantosMirando > 0 ? ` · ${s.cuantosMirando} mirando` : ""}
           </span>
-          {!esVendedor && !vendido && <Interes roomId={id} handle={handle} />}
-          {/* Avatares SOLO de ofertantes, para que coincida 1:1 con "N
-             negociando" - antes mostraba a todos (incluidos vendedor y
-             espectadores) y el número nunca calzaba con la cantidad de
-             círculos, bug real visto en vivo. */}
           <div className="ml-auto flex -space-x-2">
             {s.ofertantes.slice(0, 6).map((p) => (
               <span key={p.id} title={p.handle}
@@ -232,7 +432,7 @@ function Sala({ id, handle, distrito, esVendedor }: { id: string; handle: string
 
       <footer className="sticky bottom-0 border-t-4 border-amarillo bg-tinta p-3">
         {vendido ? (
-          ganadorHandle && (soyGanador || esVendedor) ? (
+          ganadorHandle ? (
             <CanalPrivado
               roomId={id}
               winnerHandle={ganadorHandle}
@@ -244,120 +444,42 @@ function Sala({ id, handle, distrito, esVendedor }: { id: string; handle: string
               Vendido — S/{vendido.finalPrice ?? maximo}
             </div>
           )
-        ) : esVendedor ? (
+        ) : (
           <p className="text-center text-xs font-bold uppercase tracking-widest text-papel/50">
             Vista de vendedor — el agente negocia por ti
           </p>
-        ) : (
-          <>
-            <div className="mb-2 flex items-center gap-2">
-              {EMOJIS.map((x) => (
-                <button key={x} onClick={() => s.reaccionar(x)} aria-label={`Reaccionar ${x}`}
-                  className="borde bg-papel/10 px-3 py-1 text-xl">{x}</button>
-              ))}
-              <input
-                value={texto}
-                onChange={(e) => { setTexto(e.target.value); s.sendTyping(); }}
-                onKeyDown={(e) => e.key === "Enter" && comentar()}
-                placeholder="Escribe algo…"
-                className="borde min-w-0 flex-1 bg-papel/10 px-3 py-1 text-sm outline-none"
-              />
-              {/* Etapa 1.2 — cualquiera puede pasar de espectador a ofertante
-                 y viceversa en cualquier momento (setMetadata en vivo, no
-                 reconecta). El toggle vive acá, siempre visible junto al
-                 chat, sea cual sea el modo actual. */}
-              <button
-                onClick={() => s.cambiarRol(s.rol === "spectator" ? "bidder" : "spectator")}
-                title={s.rol === "spectator" ? "Pasar a ofertante" : "Pasar a espectador"}
-                className="borde shrink-0 bg-papel/10 px-3 py-1 text-lg"
-              >
-                {s.rol === "spectator" ? "👁️" : "💰"}
-              </button>
-            </div>
-
-            {s.rol === "spectator" ? (
-              <button
-                onClick={() => s.cambiarRol("bidder")}
-                className="borde w-full bg-papel/10 px-4 py-3 text-center text-sm font-bold uppercase tracking-widest text-papel/60"
-              >
-                Estás mirando · toca para ofertar
-              </button>
-            ) : (
-              <div className="flex gap-2">
-                <div className="borde flex flex-1 items-center bg-papel px-3">
-                  <span className="display text-xl text-tinta/50">S/</span>
-                  <input
-                    inputMode="numeric" value={monto}
-                    onChange={(e) => { setMonto(e.target.value.replace(/\D/g, "")); s.sendTyping(); }}
-                    onKeyDown={(e) => e.key === "Enter" && ofertar()}
-                    placeholder={String(Math.max(maximo + 20, Math.round(lista * 0.6)))}
-                    className="w-full bg-transparent px-2 py-3 text-2xl font-black text-tinta outline-none"
-                  />
-                </div>
-                <button onClick={ofertar} disabled={enviando}
-                  className="borde bg-fucsia px-5 display text-xl text-tinta disabled:opacity-50">
-                  {enviando ? "…" : "Ofertar"}
-                </button>
-              </div>
-            )}
-            {error && <p className="mt-2 text-sm font-bold text-fucsia">{error}</p>}
-          </>
         )}
       </footer>
     </main>
   );
 }
 
-/** Botón de interés (Etapa 1.5). Toggle idempotente, propio estado - no
- *  necesita pasar por el hook de la sala. Trae el estado inicial por GET
- *  (no localStorage: el corazón vive en Postgres por sala+handle, así que
- *  sobrevive a un refresh en OTRO dispositivo si algún día hay cuentas). */
-function Interes({ roomId, handle }: { roomId: string; handle: string }) {
-  const [interesado, setInteresado] = useState(false);
-  const [cuenta, setCuenta] = useState(0);
-  const [cargando, setCargando] = useState(false);
-
-  useEffect(() => {
-    fetch(`/api/rooms/${roomId}/interest?handle=${encodeURIComponent(handle)}`)
-      .then((r) => r.json())
-      .then((j) => { setInteresado(Boolean(j.interested)); setCuenta(Number(j.count) || 0); })
-      .catch(() => {});
-  }, [roomId, handle]);
-
-  async function toggle() {
-    if (cargando) return;
-    setCargando(true);
-    try {
-      const res = await fetch(`/api/rooms/${roomId}/interest`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ handle }),
-      });
-      const j = await res.json();
-      setInteresado(Boolean(j.interested));
-      setCuenta(Number(j.count) || 0);
-    } finally {
-      setCargando(false);
-    }
-  }
-
+/** SIGNATURE: el termómetro. La tesis del producto hecha píxeles.
+ *  El piso NO está en la escala: no existe para el cliente.
+ *  Solo lo usa SalaVendedor - SalaComprador usa el termómetro que ya
+ *  trae integrado el componente de v0. */
+function Termometro({ maximo, lista }: { maximo: number; lista: number }) {
+  const pct = lista > 0 ? Math.min(100, (maximo / lista) * 100) : 0;
   return (
-    <button
-      onClick={toggle}
-      title="Avísame cuando esta sala vaya a cerrar"
-      className={`flex items-center gap-1 border-2 border-tinta px-2 py-1 text-xs font-black ${interesado ? "bg-fucsia text-tinta" : "bg-papel/10"}`}
-    >
-      <span>{interesado ? "❤️" : "🤍"}</span>
-      {cuenta > 0 && <span>{cuenta}</span>}
-    </button>
+    <div className="mt-3">
+      <div className="borde relative h-6 overflow-hidden bg-papel/15">
+        <div className="h-full bg-gradient-to-r from-naranja via-fucsia to-loro transition-[width] duration-700 ease-out"
+          style={{ width: `${pct}%` }} />
+        <div className="absolute top-0 h-full w-1 bg-tinta transition-[left] duration-700 ease-out"
+          style={{ left: `${pct}%` }} />
+      </div>
+      <div className="mt-1 flex justify-between text-[10px] font-bold uppercase tracking-widest text-papel/40">
+        <span>Arranque</span>
+        <span>{Math.round(pct)}% del precio de lista</span>
+      </div>
+    </div>
   );
 }
 
-/** SIGNATURE: el termómetro. La tesis del producto hecha píxeles.
- *  El piso NO está en la escala: no existe para el cliente. */
-/** Carrusel simple: botones prev/next + puntos. Sin librería de swipe -
- *  suficiente para 1-6 fotos, que es el tope que permite el endpoint de
- *  subida. Si solo hay una foto, no pinta flechas ni puntos. */
+/** Carrusel simple: botones prev/next + puntos. Solo lo usa SalaVendedor -
+ *  SalaComprador usa la foto única que ya maneja el componente de v0
+ *  (ver nota en la Etapa "subir producto": el carrusel multi-foto todavía
+ *  no tiene equivalente en el diseño nuevo, pendiente si se quiere). */
 function Carrusel({ fotos, alt }: { fotos: string[]; alt: string }) {
   const [i, setI] = useState(0);
   const actual = Math.min(i, fotos.length - 1);
@@ -396,27 +518,9 @@ function Carrusel({ fotos, alt }: { fotos: string[]; alt: string }) {
   );
 }
 
-function Termometro({ maximo, lista }: { maximo: number; lista: number }) {
-  const pct = lista > 0 ? Math.min(100, (maximo / lista) * 100) : 0;
-  return (
-    <div className="mt-3">
-      <div className="borde relative h-6 overflow-hidden bg-papel/15">
-        <div className="h-full bg-gradient-to-r from-naranja via-fucsia to-loro transition-[width] duration-700 ease-out"
-          style={{ width: `${pct}%` }} />
-        <div className="absolute top-0 h-full w-1 bg-tinta transition-[left] duration-700 ease-out"
-          style={{ left: `${pct}%` }} />
-      </div>
-      <div className="mt-1 flex justify-between text-[10px] font-bold uppercase tracking-widest text-papel/40">
-        <span>Arranque</span>
-        <span>{Math.round(pct)}% del precio de lista</span>
-      </div>
-    </div>
-  );
-}
-
-/** Countdown de cierre (HU-06). Sincronizado en todas las pantallas porque
- *  todas leen el mismo `closesAt` (epoch ms, server-truth) - no hay reloj
- *  compartido por socket, solo aritmética contra el reloj de cada cliente. */
+/** Countdown de cierre (HU-06). Solo lo usa SalaVendedor - SalaComprador
+ *  usa el countdown que ya trae integrado el componente de v0 (mismo
+ *  cálculo, closesAt server-truth). */
 function Countdown({ closesAt, roomId }: { closesAt: number; roomId: string }) {
   const [restanteMs, setRestanteMs] = useState(() => closesAt - Date.now());
   const disparado = useRef(false);
@@ -430,9 +534,6 @@ function Countdown({ closesAt, roomId }: { closesAt: number; roomId: string }) {
   useEffect(() => {
     if (restanteMs > 0 || disparado.current) return;
     disparado.current = true;
-    // Cualquier pestaña conectada puede disparar esto - es idempotente en
-    // el servidor (WHERE status = 'closing' AND closes_at <= now()), así
-    // que no importa si 10 clientes lo llaman al mismo segundo.
     fetch(`/api/rooms/${roomId}/resolve`, { method: "POST" }).catch(() => {});
   }, [restanteMs, roomId]);
 
@@ -453,11 +554,9 @@ function Countdown({ closesAt, roomId }: { closesAt: number; roomId: string }) {
   );
 }
 
-/** Canal privado post-venta (HU-05). Solo lo montan el vendedor y el
- *  comprador ganador - nadie más puede construir este channelId sin conocer
- *  el handle exacto del ganador, y el middleware `trato-*` en
- *  portal.config.ts enmascara igual que la sala pública si alguien pega un
- *  celular o DNI para coordinar Yape/Plin. */
+/** Canal privado post-venta (HU-05). Compartido entre SalaVendedor y
+ *  SalaComprador (solo el ganador). Sin equivalente en el componente de
+ *  v0 - se queda con su UI original a propósito. */
 function CanalPrivado({
   roomId,
   winnerHandle,
@@ -523,10 +622,8 @@ function CanalPrivado({
   );
 }
 
-/** Control del vendedor. No requiere que el vendedor esté conectado al canal
- *  (HU-10): es un disparo puntual, el agente toma la voz desde el servidor.
- *  Acceso por `?seller=1` a propósito - Clerk para vendedores sigue en
- *  colchón (F6); esto desbloquea la demo sin bloquear en auth. */
+/** Control del vendedor (HU-10). Sin equivalente en el componente de v0 -
+ *  se queda con su UI original. */
 function PanelVendedor({ roomId, status }: { roomId: string; status: string }) {
   const [enviando, setEnviando] = useState<number | null>(null);
 
@@ -549,9 +646,6 @@ function PanelVendedor({ roomId, status }: { roomId: string; status: string }) {
     <div className="borde mt-3 flex items-center gap-2 bg-tinta px-3 py-2">
       <span className="text-[10px] font-black uppercase tracking-widest text-amarillo">Panel vendedor</span>
       <div className="ml-auto flex gap-1">
-        {/* 300s (5min) es el ritmo real de cierre, tipo Binance P2P. Los
-           cortos (15s/60s) quedan para controlar el timing dramático en
-           vivo durante la demo, no para uso normal de producto. */}
         {[300, 60, 15].map((s) => (
           <button
             key={s}

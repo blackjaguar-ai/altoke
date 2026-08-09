@@ -108,6 +108,14 @@ export function useSala(roomId: string, handle: string, district: string, rolIni
     return [];
   }, [presence, me?.id, rol]);
 
+  // Distinto de `participantes` (que ya excluye al vendedor a propósito):
+  // esto SÍ necesita saber si el vendedor está conectado, para el badge
+  // "Representado por su agente" vs. avatar normal en la Sala (v0).
+  const vendedorConectado = useMemo(
+    () => presence?.kind === "detailed" && presence.participants.some((p: any) => p.metadata?.role === "seller"),
+    [presence],
+  );
+
   // participantes ya viene sin el vendedor (filtrado arriba). Acá solo se
   // parte en dos: quién puede ofertar y quién solo mira. En salas grandes
   // (`aggregate`) Portal solo da un conteo total sin metadata - ahí no se
@@ -294,6 +302,7 @@ export function useSala(roomId: string, handle: string, district: string, rolIni
     participantes,
     ofertantes,
     espectadores,
+    vendedorConectado,
     cuantos: cuantosOfertando,
     cuantosMirando,
     rol,

@@ -2,6 +2,8 @@ import { pool } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
+const CATEGORIAS = ["vehiculos", "tecnologia", "hogar", "moda", "otros"] as const;
+
 function slugify(texto: string): string {
   return texto
     .normalize("NFD")
@@ -35,6 +37,7 @@ export async function POST(req: Request) {
   const agentTone = body.agentTone
     ? String(body.agentTone).trim().slice(0, 120)
     : "firme pero amable, criollo"; // mismo default que la columna en schema.sql
+  const category = CATEGORIAS.includes(body.category) ? body.category : "otros";
 
   if (!productName) return Response.json({ error: "falta_nombre" }, { status: 400 });
   if (!Number.isFinite(listPrice) || listPrice <= 0) {
@@ -57,10 +60,10 @@ export async function POST(req: Request) {
       try {
         const row = (
           await client.query(
-            `insert into rooms (id, product_name, product_desc, list_price, floor_price, agent_tone)
-             values ($1, $2, $3, $4, $5, $6)
+            `insert into rooms (id, product_name, product_desc, category, list_price, floor_price, agent_tone)
+             values ($1, $2, $3, $4, $5, $6, $7)
              returning id`,
-            [id, productName, productDesc, listPrice, floorPrice, agentTone],
+            [id, productName, productDesc, category, listPrice, floorPrice, agentTone],
           )
         ).rows[0];
         console.log(`[rooms] creada room=${row.id} lista=${listPrice} piso=${floorPrice}`);

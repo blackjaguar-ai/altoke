@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
 export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> }) {
   const { id } = await ctx.params;
   const room = await one(
-    `select id, product_name, product_desc, photo_url, list_price,
+    `select id, product_name, product_desc, photo_url, category, list_price,
             status, highest_bid, highest_handle, winner_handle,
             final_price, closes_at
        from rooms where id = $1`,

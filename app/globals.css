@@ -39,6 +39,171 @@ body {
   text-transform: uppercase;
 }
 
+/* ---------------------------------------------------------------
+   SISTEMA NUEVO (v0) — Sala y Home rediseñados, soft-UI de dos
+   capas. Convive con el "afiche chicha" de arriba a propósito: el
+   panel de vendedor y el canal privado post-venta siguen sin
+   tocarse, así que sus clases viejas (borde, bg-amarillo, etc.)
+   se quedan. Ningún nombre de variable choca entre los dos sistemas.
+   Del globals.css que generó v0 se dejó AFUERA a propósito todo el
+   bloque de shadcn/ui (@import 'shadcn/tailwind.css', --background,
+   --card, --popover, etc.) - ninguno de los dos componentes reales
+   (auction-room.tsx, marketplace-home.tsx) lo usa, y ese paquete ni
+   siquiera está instalado en este repo - copiarlo tal cual rompía
+   el build.
+   --------------------------------------------------------------- */
+:root {
+  --bg: #e9ecf3;
+  --bg-sunken: #e1e5ee;
+  --shadow-lt: #ffffff;
+  --shadow-dk: #c3c9d9;
+  --ink: #14161f;
+  --ink-soft: #6a7185;
+  --altoke-accent: #5b3df5;
+  --accent-deep: #3a25b8;
+  --live: #e0339b;
+  --cool: #2bb8d4;
+  --sold: #0f9b8e;
+  --action-ink: #ffffff;
+  --heat: linear-gradient(90deg, #2bb8d4, #5b3df5, #e0339b);
+  --neu-out: 6px 6px 12px var(--shadow-dk), -6px -6px 12px var(--shadow-lt);
+  --neu-in: inset 4px 4px 8px var(--shadow-dk), inset -4px -4px 8px var(--shadow-lt);
+  --font-sans: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
+}
+
+@theme inline {
+  --color-altoke-bg: var(--bg);
+  --color-altoke-sunken: var(--bg-sunken);
+  --color-altoke-ink: var(--ink);
+  --color-altoke-ink-soft: var(--ink-soft);
+  --color-altoke-accent: var(--altoke-accent);
+  --color-altoke-accent-deep: var(--accent-deep);
+  --color-altoke-live: var(--live);
+  --color-altoke-cool: var(--cool);
+  --color-altoke-sold: var(--sold);
+  --color-altoke-action-ink: var(--action-ink);
+}
+
+.altoke-room {
+  color-scheme: dark;
+  --bg: #191c26;
+  --bg-sunken: #191c26;
+  --shadow-lt: #232733;
+  --shadow-dk: #10121a;
+  --ink: #f7f8fc;
+  --ink-soft: #9aa2b8;
+  --action-ink: #ffffff;
+  --neu-out: 6px 6px 12px var(--shadow-dk), -6px -6px 12px var(--shadow-lt);
+  --neu-in: inset 4px 4px 8px var(--shadow-dk), inset -4px -4px 8px var(--shadow-lt);
+}
+
+.bg-altoke-heat { background: var(--heat); }
+.altoke-inset { background: var(--bg); box-shadow: var(--neu-in); }
+.altoke-icon-button {
+  display: grid;
+  width: 44px;
+  height: 44px;
+  place-items: center;
+  border: 0;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--bg) 91%, transparent);
+  color: var(--ink);
+  box-shadow: var(--neu-out);
+  backdrop-filter: blur(14px);
+}
+.altoke-icon-button svg, .altoke-tab svg, .altoke-message-input svg, .altoke-role-toggle svg, .altoke-spectator-message svg { width: 18px; height: 18px; }
+.altoke-interest-active { background: var(--live); color: var(--action-ink); }
+.altoke-live-pill, .altoke-glass-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border-radius: 999px;
+  padding: 5px 9px;
+  color: #ffffff;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
+}
+.altoke-live-pill { background: var(--live); }
+.altoke-glass-pill { background: rgba(16, 18, 26, .56); backdrop-filter: blur(10px); }
+.altoke-live-pill svg { width: 12px; height: 12px; }
+.altoke-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  border: 0;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--bg) 88%, transparent);
+  padding: 9px 14px;
+  color: var(--ink-soft);
+  box-shadow: var(--neu-out);
+  font-size: 12px;
+  font-weight: 700;
+  backdrop-filter: blur(12px);
+}
+.altoke-tab-active { color: var(--ink); box-shadow: var(--neu-in); }
+.chat-fade { mask-image: linear-gradient(to bottom, transparent 0%, black 22%, black 100%); padding-top: 24px; }
+.altoke-message-input {
+  margin-top: 4px;
+  border-radius: 999px;
+  background: rgba(25, 28, 38, .72);
+  padding: 6px 8px 6px 14px;
+  box-shadow: var(--neu-in);
+  backdrop-filter: blur(14px);
+}
+.altoke-message-input input { min-width: 0; flex: 1; border: 0; background: transparent; color: var(--ink); font-size: 13px; outline: 0; }
+.altoke-message-input input::placeholder { color: var(--ink-soft); }
+.altoke-message-input button { display: grid; width: 32px; height: 32px; place-items: center; border: 0; border-radius: 999px; background: var(--altoke-accent); color: var(--action-ink); }
+.altoke-picker { border-radius: 999px; background: color-mix(in srgb, var(--bg) 94%, transparent); padding: 6px; box-shadow: var(--neu-out); backdrop-filter: blur(12px); }
+.altoke-picker button { display: grid; width: 34px; height: 34px; place-items: center; border: 0; background: transparent; font-size: 20px; }
+.altoke-countdown { display: inline-block; border-radius: 999px; background: var(--live); padding: 3px 8px; color: var(--action-ink); font-size: 12px; font-weight: 700; }
+.altoke-role-toggle { display: grid; width: 52px; flex: 0 0 52px; place-items: center; border: 0; border-radius: 999px; background: var(--bg); color: var(--ink); box-shadow: var(--neu-out); }
+.altoke-bid-button { width: 42%; border: 0; border-radius: 20px; background: var(--altoke-accent); color: var(--action-ink); font-weight: 800; text-transform: uppercase; letter-spacing: .08em; }
+.altoke-bid-button:active { background: var(--accent-deep); }
+.altoke-spectator-message { display: flex; min-height: 54px; flex: 1; align-items: center; justify-content: center; gap: 8px; border: 0; border-radius: 20px; background: var(--bg); color: var(--ink-soft); box-shadow: var(--neu-in); font-size: 13px; font-weight: 700; }
+.reaction-particle { position: absolute; right: 8px; bottom: 0; font-size: 28px; animation: reaction-rise 3.6s ease-out var(--reaction-delay) both infinite; transform: translateX(var(--reaction-x)); }
+@keyframes reaction-rise { 0% { opacity: 0; transform: translate(var(--reaction-x), 30px) scale(.75); } 18% { opacity: 1; } 100% { opacity: 0; transform: translate(calc(var(--reaction-x) * -1), -420px) scale(1.25) rotate(12deg); } }
+
+.altoke-home { color-scheme: light; }
+.home-brand-mark { display: grid; width: 42px; height: 42px; place-items: center; border-radius: 999px; background: var(--altoke-accent); color: var(--action-ink); box-shadow: var(--neu-out); font-size: 18px; font-weight: 800; }
+.home-search { display: flex; min-height: 52px; align-items: center; gap: 10px; border-radius: 18px; background: var(--bg); padding-inline: 16px; box-shadow: var(--neu-in); color: var(--ink-soft); }
+.home-search svg { width: 18px; height: 18px; flex: 0 0 auto; }
+.home-search input { min-width: 0; flex: 1; border: 0; background: transparent; color: var(--ink); font-size: 14px; outline: 0; }
+.home-search input::placeholder { color: var(--ink-soft); }
+.home-horizontal-scroll { display: flex; width: calc(100% + 16px); gap: 12px; overflow-x: auto; padding: 4px 16px 12px 2px; scrollbar-width: none; scroll-snap-type: x proximity; }
+.home-horizontal-scroll::-webkit-scrollbar { display: none; }
+.home-category-chip { flex: 0 0 auto; border: 0; border-radius: 999px; background: var(--bg); padding: 10px 16px; box-shadow: var(--neu-out); color: var(--ink-soft); font-size: 13px; font-weight: 700; white-space: nowrap; }
+.home-category-active { color: var(--altoke-accent); box-shadow: var(--neu-in); }
+.home-hot-rail { gap: 14px; padding-bottom: 14px; }
+.home-hot-card { display: flex; width: 160px; flex: 0 0 160px; scroll-snap-align: start; flex-direction: column; gap: 9px; border: 0; border-radius: 20px; background: var(--bg); padding: 8px; box-shadow: var(--neu-out); }
+.home-room-media { position: relative; width: 100%; aspect-ratio: 1 / .9; overflow: hidden; border-radius: 20px; background: var(--bg-sunken); }
+.home-live-pill { position: absolute; top: 8px; left: 8px; border-radius: 999px; background: var(--live); padding: 5px 8px; color: var(--action-ink); font-size: 9px; font-weight: 800; letter-spacing: .04em; }
+.home-heat-track { position: absolute; right: 0; bottom: 0; left: 0; height: 3px; background: color-mix(in srgb, var(--bg-sunken) 75%, transparent); }
+.home-heat-track > span { display: block; height: 100%; background: var(--heat); }
+.home-room-card { position: relative; display: flex; min-width: 0; flex-direction: column; gap: 11px; border: 0; border-radius: 24px; background: var(--bg); padding: 8px; box-shadow: var(--neu-out); }
+.home-room-card:active, .home-hot-card:active { box-shadow: var(--neu-in); }
+.home-district-chip { align-self: flex-start; max-width: 100%; overflow: hidden; border-radius: 999px; background: var(--bg); padding: 5px 9px; box-shadow: var(--neu-in); color: var(--ink-soft); font-size: 10px; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
+.home-room-closing::after { position: absolute; inset: -3px; border: 2px solid var(--live); border-radius: 27px; content: ''; pointer-events: none; animation: closing-ring 1.8s ease-out infinite; }
+@keyframes closing-ring { 0%, 100% { opacity: .9; transform: scale(1); } 50% { opacity: .25; transform: scale(1.025); } }
+.home-empty { border-radius: 20px; padding: 28px 18px; box-shadow: var(--neu-in); color: var(--ink-soft); text-align: center; font-size: 14px; }
+.home-sales { border-radius: 22px; background: var(--bg); padding: 15px; box-shadow: var(--neu-out); }
+.home-sales-trigger { display: flex; width: 100%; align-items: center; justify-content: space-between; gap: 16px; border: 0; background: transparent; color: var(--ink); text-align: left; }
+.home-sales-trigger span { display: flex; flex-direction: column; gap: 2px; }
+.home-sales-trigger small { color: var(--ink-soft); font-size: 11px; }
+.home-sales-trigger svg { width: 18px; height: 18px; transition: transform .2s ease; }
+.home-sale-row { display: flex; min-width: 0; align-items: center; gap: 10px; border-radius: 15px; padding: 7px; box-shadow: var(--neu-in); }
+.home-bottom-nav { position: fixed; right: 10px; bottom: max(10px, env(safe-area-inset-bottom)); left: 10px; z-index: 20; display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; border-radius: 24px; background: color-mix(in srgb, var(--bg) 92%, transparent); padding: 8px; box-shadow: var(--neu-out); backdrop-filter: blur(18px); }
+.home-bottom-nav button { display: flex; min-width: 0; flex-direction: column; align-items: center; gap: 4px; border: 0; border-radius: 17px; background: transparent; padding: 8px 2px 7px; color: var(--ink-soft); font-size: 9px; font-weight: 700; }
+.home-bottom-nav button svg { width: 18px; height: 18px; }
+.home-bottom-nav .home-nav-active { color: var(--altoke-accent); box-shadow: var(--neu-in); }
+
+@media (min-width: 768px) {
+  .altoke-room footer { left: 50%; right: auto; width: min(680px, calc(100% - 48px)); transform: translateX(-50%); border-radius: 28px 28px 0 0; box-shadow: var(--neu-out); }
+  .home-bottom-nav { left: 50%; width: min(520px, calc(100% - 40px)); transform: translateX(-50%); }
+  .home-horizontal-scroll { width: 100%; padding-right: 4px; }
+}
+
 /* Sombra dura de serigrafía: el afiche no tiene blur. */
 .dura { text-shadow: 3px 3px 0 var(--tinta); }
 .borde { border: 2px solid var(--tinta); box-shadow: 5px 5px 0 var(--tinta); }

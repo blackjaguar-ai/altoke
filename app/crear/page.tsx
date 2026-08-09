@@ -4,11 +4,19 @@ import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
 const MAX_FOTOS = 6;
+const CATEGORIAS: { id: string; label: string }[] = [
+  { id: "vehiculos", label: "Vehículos" },
+  { id: "tecnologia", label: "Tecnología" },
+  { id: "hogar", label: "Hogar" },
+  { id: "moda", label: "Moda" },
+  { id: "otros", label: "Otros" },
+];
 
 export default function CrearSalaPage() {
   const router = useRouter();
   const [productName, setProductName] = useState("");
   const [productDesc, setProductDesc] = useState("");
+  const [category, setCategory] = useState("otros");
   const [listPrice, setListPrice] = useState("");
   const [floorPrice, setFloorPrice] = useState("");
   const [fotos, setFotos] = useState<File[]>([]);
@@ -44,6 +52,7 @@ export default function CrearSalaPage() {
         body: JSON.stringify({
           productName: productName.trim(),
           productDesc: productDesc.trim() || null,
+          category,
           listPrice: lista,
           floorPrice: piso,
         }),
@@ -104,6 +113,15 @@ export default function CrearSalaPage() {
         rows={4}
         className="borde w-full bg-papel px-4 py-3 text-sm text-tinta outline-none focus:ring-4 focus:ring-fucsia"
       />
+
+      <label className="text-xs font-bold uppercase tracking-widest text-papel/60">Categoría</label>
+      <select
+        value={category}
+        onChange={(e) => setCategory(e.target.value)}
+        className="borde w-full bg-papel px-4 py-3 font-bold text-tinta outline-none focus:ring-4 focus:ring-fucsia"
+      >
+        {CATEGORIAS.map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}
+      </select>
 
       <div className="flex gap-3">
         <div className="flex-1">
