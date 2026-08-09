@@ -434,14 +434,17 @@ function PanelVendedor({ roomId, status }: { roomId: string; status: string }) {
     <div className="borde mt-3 flex items-center gap-2 bg-tinta px-3 py-2">
       <span className="text-[10px] font-black uppercase tracking-widest text-amarillo">Panel vendedor</span>
       <div className="ml-auto flex gap-1">
-        {[15, 30, 60].map((s) => (
+        {/* 300s (5min) es el ritmo real de cierre, tipo Binance P2P. Los
+           cortos (15s/60s) quedan para controlar el timing dramático en
+           vivo durante la demo, no para uso normal de producto. */}
+        {[300, 60, 15].map((s) => (
           <button
             key={s}
             disabled={enviando !== null}
             onClick={() => anunciarCierre(s)}
             className="borde bg-amarillo px-2 py-1 text-xs font-black text-tinta disabled:opacity-40"
           >
-            {enviando === s ? "…" : `Cerrar ${s}s`}
+            {enviando === s ? "…" : s >= 60 && s % 60 === 0 ? `Cerrar ${s / 60}min` : `Cerrar ${s}s`}
           </button>
         ))}
       </div>

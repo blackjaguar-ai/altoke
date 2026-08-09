@@ -4,8 +4,8 @@ import { publicar, canalSala } from "@/lib/portal-server";
 export const dynamic = "force-dynamic";
 
 const MIN_S = 10;
-const MAX_S = 180;
-const DEFAULT_S = 30;
+const MAX_S = 300;
+const DEFAULT_S = 300; // 5 min, ritmo tipo Binance P2P (PRD, punto 2 del pedido nuevo)
 
 /**
  * Anuncia el cierre de la sala: arranca el countdown sincronizado (HU-06).

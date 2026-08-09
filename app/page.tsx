@@ -5,10 +5,18 @@ export const dynamic = "force-dynamic";
 
 export default async function Home() {
   let salas: any[] = [];
+  let vendidas: any[] = [];
   try {
+    // Abiertas y cerrando en un solo grid principal. Vendidas NUNCA
+    // aparecen acá - si el jurado navega al home después de cerrar una
+    // sala en vivo, no debe confundirse una vendida con una abierta.
     salas = await q(
       `select id, product_name, photo_url, list_price, highest_bid, status
-         from rooms order by created_at desc limit 12`
+         from rooms where status <> 'sold' order by created_at desc limit 12`
+    );
+    vendidas = await q(
+      `select id, product_name, photo_url, final_price
+         from rooms where status = 'sold' order by created_at desc limit 8`
     );
   } catch {}
 
@@ -39,11 +47,8 @@ export default async function Home() {
             href={`/sala/${s.id}`}
             className="borde relative flex items-center gap-3 bg-papel/10 p-3 transition hover:bg-papel/20"
           >
-            {s.status === "sold" && (
-              <span className="absolute right-3 top-3 border-2 border-tinta bg-loro px-2 py-0.5 text-[10px] font-black uppercase tracking-widest text-tinta">
-                Vendido
-              </span>
-            )}
+            {/* status "sold" nunca llega aquí: la query ya lo excluye del
+               grid principal (ver sección "Últimas ventas" más abajo). */}
             {s.status === "closing" && (
               <span className="absolute right-3 top-3 border-2 border-tinta bg-fucsia px-2 py-0.5 text-[10px] font-black uppercase tracking-widest text-tinta animate-pulse">
                 Cerrando
@@ -59,13 +64,39 @@ export default async function Home() {
             </div>
             <div className="ml-auto text-right">
               <div className="text-[10px] uppercase tracking-widest text-papel/50">
-                {s.status === "sold" ? "Precio final" : "Mejor oferta"}
+                Mejor oferta
               </div>
               <div className="display text-2xl text-loro">S/{Number(s.highest_bid) || "—"}</div>
             </div>
           </Link>
         ))}
       </div>
+
+      {vendidas.length > 0 && (
+        <>
+          <h2 className="mt-10 display text-sm tracking-widest text-papel/50">
+            Últimas ventas
+          </h2>
+          <div className="mt-4 grid gap-2">
+            {vendidas.map((s) => (
+              <Link
+                key={s.id}
+                href={`/sala/${s.id}`}
+                className="borde flex items-center gap-3 bg-papel/5 p-2 opacity-70 transition hover:opacity-100"
+              >
+                {s.photo_url && (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={s.photo_url} alt="" className="h-10 w-10 object-cover borde" />
+                )}
+                <div className="min-w-0 truncate text-sm">{s.product_name}</div>
+                <div className="ml-auto shrink-0 text-sm text-loro">
+                  S/{Number(s.final_price) || "—"}
+                </div>
+              </Link>
+            ))}
+          </div>
+        </>
+      )}
     </main>
   );
 }

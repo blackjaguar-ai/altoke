@@ -121,12 +121,22 @@ export function useSala(roomId: string, handle: string, district: string, role: 
 
   const ofertar = useCallback(
     async (amount: number): Promise<string | null> => {
+      // Un nonce nuevo POR CLICK, no por sesión. Reenvío de red de esta
+      // misma request (mismo nonce) => el servidor lo dedupea en silencio,
+      // como debe ser. Un click nuevo del comprador, aunque sea el mismo
+      // monto, es una oferta nueva y debe llegar hasta el agente - antes se
+      // perdía sin aviso (bug real, prueba HU-02).
+      const clientNonce =
+        typeof crypto !== "undefined" && "randomUUID" in crypto
+          ? crypto.randomUUID()
+          : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+
       // El monto es dinero: lo valida y lo publica el SERVIDOR.
       // El cliente jamás publica una oferta directo al canal.
       const res = await fetch("/api/bids", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ roomId, handle, amount, district }),
+        body: JSON.stringify({ roomId, handle, amount, district, clientNonce }),
       });
 
       if (res.ok) {
@@ -135,10 +145,18 @@ export function useSala(roomId: string, handle: string, district: string, role: 
       }
 
       const j: any = await res.json().catch(() => ({}));
+      if (j.error === "rate_limited") {
+        const s = Math.ceil((Number(j.retryMs) || 0) / 1000);
+        return `Espera ${s}s antes de volver a ofertar.`;
+      }
+      if (j.error === "increment_bajo") {
+        return `Sube al menos a S/${j.minRequired} para superar la oferta actual.`;
+      }
       const errores: Record<string, string> = {
         bad_amount: "Escribe un monto válido.",
         room_closed: "Esta sala ya se cerró.",
         room_not_found: "No encontramos esta sala.",
+        missing_nonce: "Algo falló al enviar tu oferta. Intenta otra vez.",
         server_error: "Algo falló de nuestro lado. Intenta otra vez.",
       };
       return errores[j.error] ?? "No se pudo enviar la oferta.";
