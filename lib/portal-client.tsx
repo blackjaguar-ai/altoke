@@ -2,7 +2,7 @@
 
 import { useCallback, useMemo } from "react";
 import { useChannel } from "@portalsdk/react";
-import { canalSala } from "./portal";
+import { canalSala, canalTrato } from "./portal";
 
 /**
  * Contenido del mensaje. `t` es el discriminador y vive DENTRO de `content` a
@@ -181,4 +181,50 @@ export function useSala(roomId: string, handle: string, district: string, role: 
     reaccionar,
     comentar,
   };
+}
+
+/**
+ * Canal privado post-cierre (HU-05). Se monta SOLO cuando ya hay ganador -
+ * el componente que llama esto no debe renderizarse antes de que la venta
+ * se cierre, porque `winnerHandle` vacío produciría un channelId inválido.
+ * Mismo patrón `trato-*` que ya cubre portal.config.ts con moderación de
+ * datos sensibles (HU-09) - coordinar Yape/Plin aquí pasa por el mismo
+ * middleware que enmascara DNI/celular/dirección.
+ */
+export function useTrato(roomId: string, winnerHandle: string, myHandle: string) {
+  const { messages, send, status } = useChannel<Contenido>({
+    channelId: canalTrato(roomId, winnerHandle),
+    history: 50,
+    metadata: { handle: myHandle },
+  });
+
+  const eventos: EventoUI[] = useMemo(
+    () =>
+      messages.map((m) => ({
+        id: m.id,
+        ts: m.timestamp,
+        senderId: m.sender.id,
+        ephemeral: Boolean(m.ephemeral),
+        c: m.content,
+      })),
+    [messages],
+  );
+
+  // Mismo canal que usa la moderación de datos (protegerDatos en
+  // portal.config.ts) - por eso SÍ conviene coordinar Yape/Plin acá: si
+  // alguien pega su número o DNI por error, se enmascara igual que en la
+  // sala pública, no queda expuesto en texto plano.
+  const comentar = useCallback(
+    async (body: string) => {
+      try {
+        await send({ content: { t: "chat", handle: myHandle, body } });
+        return null;
+      } catch (e: any) {
+        return e?.reason ?? "No se pudo enviar el mensaje.";
+      }
+    },
+    [send, myHandle],
+  );
+
+  return { eventos, comentar, status };
 }

@@ -2,7 +2,7 @@
 
 import { use, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { useSala, type EventoUI } from "@/lib/portal-client";
+import { useSala, useTrato, type EventoUI } from "@/lib/portal-client";
 
 const DISTRITOS = ["Surco", "Miraflores", "San Juan de Lurigancho", "Comas", "Callao", "Ate", "Los Olivos"];
 const EMOJIS = ["🔥", "😱", "💸", "👏"];
@@ -15,6 +15,8 @@ interface RoomPublic {
   list_price: string;
   status: string;
   highest_bid: string;
+  highest_handle: string | null;
+  winner_handle: string | null;
   final_price: string | null;
   closes_at: string | null;
 }
@@ -109,9 +111,19 @@ function Sala({ id, handle, distrito, esVendedor }: { id: string; handle: string
 
   const lista = Number(room.list_price);
   const maximo = Math.max(s.maximoCanal, Number(room.highest_bid));
-  const vendido = s.vendido ?? (room.status === "sold" ? { finalPrice: Number(room.final_price) } : null);
+  const vendido =
+    s.vendido ??
+    (room.status === "sold"
+      ? { finalPrice: Number(room.final_price), winner: room.winner_handle ?? undefined }
+      : null);
   const persistentes = s.eventos.filter((e) => !e.ephemeral && e.c.t !== "agent_typing");
   const reacciones = s.eventos.filter((e) => e.c.t === "reaction" && Date.now() - e.ts < 2500);
+
+  // Quién puede ver el canal privado (HU-05): el vendedor siempre, y el
+  // comprador SOLO si su handle coincide con el que ganó. Nadie más - ni
+  // siquiera otro comprador que perdió la puja puede espiar la coordinación.
+  const ganadorHandle = vendido?.winner;
+  const soyGanador = !esVendedor && Boolean(ganadorHandle) && handle === ganadorHandle;
 
   // Countdown de cierre: el canal en vivo (s.cierre) manda; si alguien recién
   // entró y el historial de 50 mensajes no alcanzó a traer el anuncio, el
@@ -212,9 +224,18 @@ function Sala({ id, handle, distrito, esVendedor }: { id: string; handle: string
 
       <footer className="sticky bottom-0 border-t-4 border-amarillo bg-tinta p-3">
         {vendido ? (
-          <div className="borde bg-loro px-4 py-4 text-center display text-2xl text-tinta">
-            Vendido — S/{vendido.finalPrice ?? maximo}
-          </div>
+          ganadorHandle && (soyGanador || esVendedor) ? (
+            <CanalPrivado
+              roomId={id}
+              winnerHandle={ganadorHandle}
+              myHandle={handle}
+              finalPrice={vendido.finalPrice ?? maximo}
+            />
+          ) : (
+            <div className="borde bg-loro px-4 py-4 text-center display text-2xl text-tinta">
+              Vendido — S/{vendido.finalPrice ?? maximo}
+            </div>
+          )
         ) : esVendedor ? (
           <p className="text-center text-xs font-bold uppercase tracking-widest text-papel/50">
             Vista de vendedor — el agente negocia por ti
@@ -313,6 +334,76 @@ function Countdown({ closesAt, roomId }: { closesAt: number; roomId: string }) {
       <span className={`display text-3xl dura ${urgente ? "animate-pulse" : ""}`}>
         {String(Math.floor(segundos / 60)).padStart(2, "0")}:{String(segundos % 60).padStart(2, "0")}
       </span>
+    </div>
+  );
+}
+
+/** Canal privado post-venta (HU-05). Solo lo montan el vendedor y el
+ *  comprador ganador - nadie más puede construir este channelId sin conocer
+ *  el handle exacto del ganador, y el middleware `trato-*` en
+ *  portal.config.ts enmascara igual que la sala pública si alguien pega un
+ *  celular o DNI para coordinar Yape/Plin. */
+function CanalPrivado({
+  roomId,
+  winnerHandle,
+  myHandle,
+  finalPrice,
+}: {
+  roomId: string;
+  winnerHandle: string;
+  myHandle: string;
+  finalPrice: number;
+}) {
+  const [texto, setTexto] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const feedRef = useRef<HTMLDivElement>(null);
+  const t = useTrato(roomId, winnerHandle, myHandle);
+
+  useEffect(() => {
+    feedRef.current?.scrollTo({ top: 1e9, behavior: "smooth" });
+  }, [t.eventos.length]);
+
+  async function enviar() {
+    if (!texto.trim()) return;
+    const err = await t.comentar(texto.trim());
+    if (err) setError(err); else { setTexto(""); setError(null); }
+  }
+
+  return (
+    <div className="borde bg-loro text-tinta">
+      <div className="border-b-2 border-tinta/20 px-4 py-2 text-center">
+        <p className="display text-xl dura">Vendido — S/{finalPrice}</p>
+        <p className="text-[10px] font-bold uppercase tracking-widest opacity-70">
+          Canal privado para coordinar la entrega
+        </p>
+      </div>
+      <div ref={feedRef} className="max-h-40 space-y-1 overflow-y-auto px-4 py-2">
+        {t.eventos.filter((e) => e.c.t === "chat").length === 0 && (
+          <p className="text-center text-xs opacity-60">
+            Coordinen aquí Yape, Plin o el punto de entrega.
+          </p>
+        )}
+        {t.eventos.map((e) =>
+          e.c.t === "chat" ? (
+            <p key={e.id} className="text-sm">
+              <span className="font-black">{e.c.handle === myHandle ? "Tú" : e.c.handle}</span> {e.c.body}
+            </p>
+          ) : null,
+        )}
+      </div>
+      <div className="flex gap-2 border-t-2 border-tinta/20 p-2">
+        <input
+          value={texto}
+          onChange={(e) => setTexto(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && enviar()}
+          placeholder="Escribe para coordinar…"
+          className="min-w-0 flex-1 rounded-none border-2 border-tinta bg-papel px-3 py-2 text-sm text-tinta outline-none"
+        />
+        <button onClick={enviar} className="border-2 border-tinta bg-tinta px-4 text-sm font-black text-amarillo">
+          Enviar
+        </button>
+      </div>
+      {error && <p className="px-4 pb-2 text-xs font-bold">{error}</p>}
     </div>
   );
 }
