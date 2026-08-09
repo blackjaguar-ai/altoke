@@ -190,10 +190,14 @@ function Sala({ id, handle, distrito, esVendedor }: { id: string; handle: string
             {s.cuantos} negociando{s.cuantosMirando > 0 ? ` · ${s.cuantosMirando} mirando` : ""}
           </span>
           {!esVendedor && !vendido && <Interes roomId={id} handle={handle} />}
+          {/* Avatares SOLO de ofertantes, para que coincida 1:1 con "N
+             negociando" - antes mostraba a todos (incluidos vendedor y
+             espectadores) y el número nunca calzaba con la cantidad de
+             círculos, bug real visto en vivo. */}
           <div className="ml-auto flex -space-x-2">
-            {s.participantes.slice(0, 6).map((p) => (
+            {s.ofertantes.slice(0, 6).map((p) => (
               <span key={p.id} title={p.handle}
-                className={`grid h-7 w-7 place-items-center rounded-full border-2 border-tinta text-[11px] font-black text-tinta ${p.role === "spectator" ? "bg-papel/30" : "bg-fucsia"}`}>
+                className="grid h-7 w-7 place-items-center rounded-full border-2 border-tinta bg-fucsia text-[11px] font-black text-tinta">
                 {p.handle.slice(0, 2).toUpperCase()}
               </span>
             ))}

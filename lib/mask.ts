@@ -12,8 +12,12 @@ export const PII_RULES: { name: string; re: RegExp; mask: string }[] = [
   { name: "tarjeta", re: /\b(?:\d[ -]?){13,16}\b/g, mask: "[tarjeta oculta]" },
 ];
 
+// SINCRONIZADO A MANO con OFENSIVAS en portal.config.ts - mismo problema
+// que PII_RULES arriba (el middleware no puede importar de acá). Si
+// cambias uno, cambia el otro o el eco optimista del cliente y lo que de
+// verdad enmascara el servidor se desincronizan otra vez.
 export const BAD_WORDS = [
-  "concha","conchatumadre","ctm","mierda","puta","huevon","huevón","carajo","imbecil","imbécil","estupido","estúpido",
+  "concha","conchatumadre","ctm","csm","ptm","mierda","puta","huevon","huevón","carajo+","imbecil","imbécil","estupido","estúpido",
 ];
 
 export interface MaskResult { text: string; hits: string[]; blocked: boolean }

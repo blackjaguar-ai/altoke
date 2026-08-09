@@ -185,6 +185,7 @@ export async function POST(req: Request) {
     // el estado de la oferta ya confirmada.
     // ============================================================
     await client.query("BEGIN");
+    let realmenteVendido = false;
     try {
       if (decision.action === "counter") {
         await client.query(`update rooms set counter_count = counter_count + 1 where id = $1`, [
@@ -192,11 +193,15 @@ export async function POST(req: Request) {
         ]);
       }
       if (decision.action === "accept") {
-        await client.query(
+        const upd = await client.query(
           `update rooms set status = 'sold', winner_handle = $1, final_price = $2
-             where id = $3 and status <> 'sold'`,
+             where id = $3 and status <> 'sold'
+           returning id`,
           [handle, decision.amount, roomId],
         );
+        // Si esto no afectó fila, alguien más (el countdown, vía resolve())
+        // ya vendió la sala mientras esperábamos al LLM. No es nuestro.
+        realmenteVendido = upd.rowCount === 1;
       }
       await client.query(
         `insert into agent_msgs (room_id, bid_id, action, amount, reason, text, latency_ms)
@@ -217,6 +222,27 @@ export async function POST(req: Request) {
       throw e;
     }
 
+    // ============================================================
+    // GUARD DE RACE — bug real visto en vivo: oferta de último segundo +
+    // countdown resolviendo en PARALELO (resolve() no espera a que este
+    // request termine su llamada al LLM, ni tiene por qué). Si mientras
+    // draft() tardaba 1-3s la sala YA se vendió por el countdown, esta
+    // decisión (un "counter" o "outbid" calculado contra un estado que ya
+    // no existe) es historia vieja. Publicarla igual confunde al ganador
+    // real con un mensaje del agente contradictorio DESPUÉS del "vendido".
+    // ============================================================
+    const estadoFinal = (
+      await client.query(`select status from rooms where id = $1`, [roomId])
+    ).rows[0]?.status;
+    const decisionObsoleta = estadoFinal === "sold" && !(decision.action === "accept" && realmenteVendido);
+
+    if (decisionObsoleta) {
+      console.log(
+        `[bid] room=${roomId} handle=${handle} decisión ${decision.action} descartada - la sala ya se vendió por otro camino (probablemente el countdown)`,
+      );
+      return Response.json({ ok: true, discarded: "room_already_sold" });
+    }
+
     await difundir(roomId, {
       t: "agent",
       action: decision.action,
@@ -224,7 +250,7 @@ export async function POST(req: Request) {
       text,
     });
 
-    if (decision.action === "accept") {
+    if (decision.action === "accept" && realmenteVendido) {
       await difundir(roomId, {
         t: "state",
         status: "sold",

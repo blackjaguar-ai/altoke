@@ -29,7 +29,12 @@ const REGLAS: { re: RegExp; mask: string }[] = [
 ];
 
 const OFENSIVAS =
-  /\b(conchatumadre|ctm|mierda|puta|huev[oó]n|carajo|imb[eé]cil|est[uú]pido)\b/gi;
+  // "ptm"/"csm" agregadas (bugs reales vistos en vivo: pasaban sin
+  // enmascarar). "carajo+" en vez de "carajo": el \b de cierre exige que
+  // la palabra termine justo ahí, así que "carajooo" (alargada, evasión
+  // común) no matcheaba con el \b estricto - el + permite una o más
+  // repeticiones de la última letra y sigue cerrando con \b al final.
+  /\b(conchatumadre|ctm|csm|ptm|mierda|puta|huev[oó]n|carajo+|imb[eé]cil|est[uú]pido)\b/gi;
 
 // ============================================================
 // ETAPA 1.4 — TRES STRIKES. El middleware sigue siendo "cero LLM", pero deja

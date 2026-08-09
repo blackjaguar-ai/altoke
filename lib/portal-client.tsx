@@ -42,7 +42,6 @@ export interface ReaccionUI {
 
 const REACCION_PREFIJO = "reaccion:";
 const REACCION_VIDA_MS = 1800;
-const PENSANDO_KIND = "agente_pensando";
 
 export type RolSala = "seller" | "bidder" | "spectator";
 
@@ -85,22 +84,30 @@ export function useSala(roomId: string, handle: string, district: string, rolIni
   // Se narrowea por `kind`; nunca se asume una sola forma.
   const participantes = useMemo(() => {
     if (presence?.kind === "detailed") {
-      return presence.participants.map((p: any) => ({
-        id: String(p.id),
-        handle: String(p.metadata?.handle ?? p.username ?? p.id).slice(0, 12),
-        role: (p.metadata?.role as RolSala | undefined) ?? "bidder",
-      }));
+      // El vendedor SE CONECTA al canal (para el countdown/panel), pero no
+      // es un negociante ni un espectador de su propia sala - se filtra
+      // acá, en la fuente. Bug real visto en vivo: este filtro se perdió
+      // en un refactor y el vendedor volvió a aparecer en la lista de
+      // avatares, con el conteo desalineado del número de avatares.
+      return presence.participants
+        .filter((p: any) => p.metadata?.role !== "seller")
+        .map((p: any) => ({
+          id: String(p.id),
+          handle: String(p.metadata?.handle ?? p.username ?? p.id).slice(0, 12),
+          role: (p.metadata?.role as RolSala | undefined) ?? "bidder",
+        }));
     }
     return [];
   }, [presence]);
 
-  // El vendedor se filtra de las TRES vistas: no es un negociante ni un
-  // espectador de su propia sala. En salas grandes (`aggregate`) Portal
-  // solo da un conteo total sin metadata - ahí no se puede partir en dos,
-  // así que todo el agregado cae en "ofertantes" (documentado a propósito;
-  // a la escala de este hackathon `detailed` es lo que se usa de verdad).
+  // participantes ya viene sin el vendedor (filtrado arriba). Acá solo se
+  // parte en dos: quién puede ofertar y quién solo mira. En salas grandes
+  // (`aggregate`) Portal solo da un conteo total sin metadata - ahí no se
+  // puede partir en dos, así que todo el agregado cae en "ofertantes"
+  // (documentado a propósito; a la escala de este hackathon `detailed` es
+  // lo que se usa de verdad).
   const ofertantes = useMemo(
-    () => participantes.filter((p) => p.role !== "seller" && p.role !== "spectator"),
+    () => participantes.filter((p) => p.role !== "spectator"),
     [participantes],
   );
   const espectadores = useMemo(
@@ -111,22 +118,23 @@ export function useSala(roomId: string, handle: string, district: string, rolIni
     presence?.kind === "detailed" ? ofertantes.length : presence?.kind ? presence.count : 1;
   const cuantosMirando = presence?.kind === "detailed" ? espectadores.length : 0;
 
-  // "El agente está escribiendo": ahora vía `activity`, no vía mensajes
-  // ephemeral (ver nota en el tipo Contenido arriba). `activity` excluye
-  // los eventos propios por diseño del SDK ("never self") - lo cual encaja
-  // perfecto acá: quien ofertó ya sabe que está esperando (el botón
-  // "Ofertar" muestra su propio spinner); esta señal es para TODOS LOS
-  // DEMÁS conectados, que si no fuera por esto no verían nada moverse
-  // durante los 1-3s que tarda el LLM.
-  const pensandoDesde = useMemo(
-    () => activity.reduce((t, a) => (a.kind === PENSANDO_KIND ? Math.max(t, a.since) : t), 0),
-    [activity],
+  // "El agente está escribiendo": derivado de eventos PERSISTENTES reales
+  // ("bid" se publica en Fase 1.5, antes del LLM; "agent" se publica en
+  // Fase 3, después) - no de una señal aparte. Antes usaba sendActivity()
+  // disparado DESPUÉS de que el fetch a /api/bids ya había esperado la
+  // respuesta COMPLETA del LLM (bug real visto en vivo: el aviso aparecía
+  // recién cuando el agente YA había contestado, al revés de su propósito).
+  // Con los timestamps de "bid" y "agent" el timing es exacto por diseño:
+  // ambos ya estaban ahí, solo había que compararlos.
+  const ultimaOferta = useMemo(
+    () => eventos.reduce((t, e) => (e.c.t === "bid" ? Math.max(t, e.ts) : t), 0),
+    [eventos],
   );
   const ultimoAgente = useMemo(
     () => eventos.reduce((t, e) => (e.c.t === "agent" ? Math.max(t, e.ts) : t), 0),
     [eventos],
   );
-  const agenteEscribiendo = pensandoDesde > ultimoAgente && Date.now() - pensandoDesde < 8000;
+  const agenteEscribiendo = ultimaOferta > ultimoAgente && Date.now() - ultimaOferta < 8000;
 
   const maximoCanal = useMemo(
     () => eventos.reduce((m, e) => (e.c.t === "bid" ? Math.max(m, e.c.amount) : m), 0),
@@ -187,10 +195,6 @@ export function useSala(roomId: string, handle: string, district: string, rolIni
       });
 
       if (res.ok) {
-        // Señal para TODOS LOS DEMÁS de que el agente está redactando -
-        // ver nota en `pensandoDesde` arriba sobre por qué es sendActivity
-        // y no send({ephemeral}).
-        sendActivity(PENSANDO_KIND);
         return null;
       }
 
@@ -211,7 +215,7 @@ export function useSala(roomId: string, handle: string, district: string, rolIni
       };
       return errores[j.error] ?? "No se pudo enviar la oferta.";
     },
-    [roomId, handle, district, rol, sendActivity],
+    [roomId, handle, district, rol],
   );
 
   // ============================================================
