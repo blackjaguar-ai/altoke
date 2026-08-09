@@ -10,12 +10,33 @@ const KEY = process.env.LLM_API_KEY!;
 const MODEL = process.env.LLM_MODEL!;
 const TIMEOUT_MS = 2500;
 
+/** Lo único de presentación que el LLM necesita para sonar como un
+ *  vendedor real y no un script genérico. Nunca toca pricing.ts: esto es
+ *  contexto de qué se vende, no una decisión de precio. */
+export interface Producto {
+  name: string;
+  desc: string | null;
+}
+
 const SYSTEM = `Eres el agente negociador de un vendedor peruano en una sala de venta en vivo.
+Vendes un producto REAL, no genérico - usa su nombre y descripción para que la
+respuesta suene hecha a la medida de ESE producto, no intercambiable con
+cualquier otro artículo.
+
 Reglas absolutas:
 - NUNCA inventes, calcules ni menciones ningún número que no esté en los datos que recibes.
 - NUNCA menciones un precio mínimo, piso, o "lo menos que acepto". Ese dato no existe para ti.
-- Responde en UNA sola frase, máximo 18 palabras, español peruano coloquial, sin emojis.
+- Responde en 1-2 frases, máximo 30 palabras, español peruano coloquial, sin emojis.
 - Dirígete al comprador por su nombre.
+- VARÍA el recurso según la situación - no repitas la misma fórmula
+  ("Te la dejo en X, es buen precio") en cada respuesta, eso es lo que suena
+  a script y no a negociador real. Alterna entre: una pregunta retórica
+  ("¿quién da más por esto?"), una imagen concreta del producto en la vida
+  del comprador ("imagínatela ya en tu casa este fin de semana"), urgencia
+  genuina si quedan pocos segundos, o simple firmeza si la oferta es baja.
+- Si hay descripción del producto, apóyate en UN detalle concreto de ella
+  cuando aporte al argumento - nunca la repitas entera, nunca inventes
+  características que no están ahí.
 - Si los datos traen su distrito, puedes usarlo como argumento de cierre cuando aporte
   (ej: "acepta, para qué te mueves de Surco por 20 soles"). Nunca inventes distancias
   ni compares con otro comprador si no tienes ese dato.`;
@@ -36,9 +57,15 @@ function fallback(d: Decision, tone: string): string {
   }
 }
 
-export async function draft(d: Decision, tone: string): Promise<string> {
+export async function draft(d: Decision, tone: string, producto?: Producto): Promise<string> {
   const ctl = new AbortController();
   const timer = setTimeout(() => ctl.abort(), TIMEOUT_MS);
+  // Contexto del producto va en el SYSTEM (es estable para toda la sala,
+  // no cambia oferta a oferta) - d.facts sigue siendo lo único que va en
+  // el turno "user", auditado y sin floorPrice, sin tocar ese contrato.
+  const contextoProducto = producto
+    ? `\n\nProducto en venta: "${producto.name}".${producto.desc ? ` Descripción: ${producto.desc}` : ""}`
+    : "";
   try {
     const res = await fetch(`${BASE}/chat/completions`, {
       method: "POST",
@@ -47,9 +74,9 @@ export async function draft(d: Decision, tone: string): Promise<string> {
       body: JSON.stringify({
         model: MODEL,
         temperature: 0.7,
-        max_tokens: 60,
+        max_tokens: 90,
         messages: [
-          { role: "system", content: `${SYSTEM}\nTono del vendedor: ${tone}` },
+          { role: "system", content: `${SYSTEM}\nTono del vendedor: ${tone}${contextoProducto}` },
           { role: "user", content: JSON.stringify(d.facts) },
         ],
       }),
@@ -57,7 +84,7 @@ export async function draft(d: Decision, tone: string): Promise<string> {
     if (!res.ok) return fallback(d, tone);
     const j = await res.json();
     const text = String(j?.choices?.[0]?.message?.content ?? "").trim().replace(/^["']|["']$/g, "");
-    return text.length > 4 && text.length < 220 ? text : fallback(d, tone);
+    return text.length > 4 && text.length < 260 ? text : fallback(d, tone);
   } catch {
     return fallback(d, tone);
   } finally {
