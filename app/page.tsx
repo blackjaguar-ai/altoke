@@ -37,8 +37,18 @@ export default async function Home() {
           <Link
             key={s.id}
             href={`/sala/${s.id}`}
-            className="borde flex items-center gap-3 bg-papel/10 p-3 transition hover:bg-papel/20"
+            className="borde relative flex items-center gap-3 bg-papel/10 p-3 transition hover:bg-papel/20"
           >
+            {s.status === "sold" && (
+              <span className="absolute right-3 top-3 border-2 border-tinta bg-loro px-2 py-0.5 text-[10px] font-black uppercase tracking-widest text-tinta">
+                Vendido
+              </span>
+            )}
+            {s.status === "closing" && (
+              <span className="absolute right-3 top-3 border-2 border-tinta bg-fucsia px-2 py-0.5 text-[10px] font-black uppercase tracking-widest text-tinta animate-pulse">
+                Cerrando
+              </span>
+            )}
             {s.photo_url && (
               // eslint-disable-next-line @next/next/no-img-element
               <img src={s.photo_url} alt="" className="h-16 w-16 object-cover borde" />
@@ -48,7 +58,9 @@ export default async function Home() {
               <div className="text-xs text-papel/60">Lista S/{s.list_price}</div>
             </div>
             <div className="ml-auto text-right">
-              <div className="text-[10px] uppercase tracking-widest text-papel/50">Mejor oferta</div>
+              <div className="text-[10px] uppercase tracking-widest text-papel/50">
+                {s.status === "sold" ? "Precio final" : "Mejor oferta"}
+              </div>
               <div className="display text-2xl text-loro">S/{Number(s.highest_bid) || "—"}</div>
             </div>
           </Link>

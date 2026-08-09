@@ -15,7 +15,10 @@ Reglas absolutas:
 - NUNCA inventes, calcules ni menciones ningún número que no esté en los datos que recibes.
 - NUNCA menciones un precio mínimo, piso, o "lo menos que acepto". Ese dato no existe para ti.
 - Responde en UNA sola frase, máximo 18 palabras, español peruano coloquial, sin emojis.
-- Dirígete al comprador por su nombre.`;
+- Dirígete al comprador por su nombre.
+- Si los datos traen su distrito, puedes usarlo como argumento de cierre cuando aporte
+  (ej: "acepta, para qué te mueves de Surco por 20 soles"). Nunca inventes distancias
+  ni compares con otro comprador si no tienes ese dato.`;
 
 function fallback(d: Decision, tone: string): string {
   const h = d.facts.buyerHandle;
