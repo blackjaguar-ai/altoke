@@ -21,6 +21,9 @@ interface RoomPublic {
 
 export default function SalaPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
+  const searchParams = useSearchParams();
+  const esVendedor = searchParams.get("seller") === "1";
+
   const [handle, setHandle] = useState("");
   const [distrito, setDistrito] = useState(DISTRITOS[0]);
   const [entrado, setEntrado] = useState(false);
@@ -30,6 +33,11 @@ export default function SalaPage({ params }: { params: Promise<{ id: string }> }
     if (g) setHandle(g);
   }, []);
 
+  // El vendedor NO pasa por la entrada de comprador: no elige distrito, no
+  // ocupa un cupo de "negociando ahora". Se conecta directo con un handle
+  // fijo y `role: "seller"` en la metadata del canal (ver lib/portal-client).
+  if (esVendedor) return <Sala id={id} handle="Vendedor" distrito="" esVendedor />;
+
   if (!entrado)
     return (
       <Entrada
@@ -38,7 +46,7 @@ export default function SalaPage({ params }: { params: Promise<{ id: string }> }
         onEntrar={() => { localStorage.setItem("altoke.handle", handle.trim()); setEntrado(true); }}
       />
     );
-  return <Sala id={id} handle={handle.trim()} distrito={distrito} />;
+  return <Sala id={id} handle={handle.trim()} distrito={distrito} esVendedor={false} />;
 }
 
 function Entrada(p: {
@@ -76,17 +84,15 @@ function Entrada(p: {
   );
 }
 
-function Sala({ id, handle, distrito }: { id: string; handle: string; distrito: string }) {
+function Sala({ id, handle, distrito, esVendedor }: { id: string; handle: string; distrito: string; esVendedor: boolean }) {
   const [room, setRoom] = useState<RoomPublic | null>(null);
   const [monto, setMonto] = useState("");
   const [texto, setTexto] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [enviando, setEnviando] = useState(false);
   const feedRef = useRef<HTMLDivElement>(null);
-  const searchParams = useSearchParams();
-  const esVendedor = searchParams.get("seller") === "1";
 
-  const s = useSala(id, handle, distrito);
+  const s = useSala(id, handle, distrito, esVendedor ? "seller" : "buyer");
 
   useEffect(() => {
     const cargar = () => fetch(`/api/rooms/${id}`).then((r) => r.json()).then(setRoom).catch(() => {});
@@ -209,6 +215,10 @@ function Sala({ id, handle, distrito }: { id: string; handle: string; distrito: 
           <div className="borde bg-loro px-4 py-4 text-center display text-2xl text-tinta">
             Vendido — S/{vendido.finalPrice ?? maximo}
           </div>
+        ) : esVendedor ? (
+          <p className="text-center text-xs font-bold uppercase tracking-widest text-papel/50">
+            Vista de vendedor — el agente negocia por ti
+          </p>
         ) : (
           <>
             <div className="mb-2 flex gap-2">

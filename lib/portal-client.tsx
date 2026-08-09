@@ -25,12 +25,12 @@ export interface EventoUI {
   c: Contenido;
 }
 
-export function useSala(roomId: string, handle: string, district: string) {
+export function useSala(roomId: string, handle: string, district: string, role: "buyer" | "seller" = "buyer") {
   const { messages, send, presence, typing, sendTyping, status } =
     useChannel<Contenido>({
       channelId: canalSala(roomId),
       history: 50,
-      metadata: { handle, district },
+      metadata: { handle, district, role },
     });
 
   const eventos: EventoUI[] = useMemo(
@@ -47,17 +47,27 @@ export function useSala(roomId: string, handle: string, district: string) {
 
   // Presencia: `detailed` en salas chicas, `aggregate` en grandes.
   // Se narrowea por `kind`; nunca se asume una sola forma.
+  // El vendedor (`?seller=1`) SE CONECTA al mismo canal para controlar el
+  // countdown, pero no es un comprador negociando - se filtra por metadata
+  // tanto de la lista de avatares como del contador. Si no se filtrara,
+  // el vendedor aparecería como un negociante más en su propia sala.
   const participantes = useMemo(() => {
     if (presence?.kind === "detailed") {
-      return presence.participants.map((p: any) => ({
-        id: String(p.id),
-        handle: String(p.metadata?.handle ?? p.username ?? p.id).slice(0, 12),
-      }));
+      return presence.participants
+        .filter((p: any) => p.metadata?.role !== "seller")
+        .map((p: any) => ({
+          id: String(p.id),
+          handle: String(p.metadata?.handle ?? p.username ?? p.id).slice(0, 12),
+        }));
     }
     return [];
   }, [presence]);
 
-  const cuantos = presence?.kind ? presence.count : 1;
+  // En salas grandes (`aggregate`) Portal solo da un conteo agregado, sin
+  // metadata por participante - ahí no se puede filtrar al vendedor del
+  // total. Documentado a propósito: en la escala de este hackathon
+  // (`detailed`) el conteo real ya sale bien filtrado arriba.
+  const cuantos = presence?.kind === "detailed" ? participantes.length : presence?.kind ? presence.count : 1;
 
   // "El agente está escribiendo": estado efímero que publica quien ofertó.
   // Se apaga solo cuando llega el mensaje del agente.
