@@ -15,7 +15,7 @@
  * componente cliente.
  */
 
-import type { Contenido } from "./portal-client";
+import type { Contenido, EventoLobby } from "./portal-client";
 
 const API = process.env.PORTAL_API_URL ?? "https://api.useportal.co";
 const SECRET = process.env.PORTAL_SECRET_KEY!;
@@ -32,7 +32,7 @@ const AGENT_SENDER_ID = "agent-vendedor";
 
 export async function publicar(
   channelId: string,
-  content: Contenido,
+  content: Contenido | EventoLobby,
 ): Promise<AckPublicacion | null> {
   const t0 = Date.now();
   try {
@@ -67,3 +67,17 @@ export async function publicar(
 export const canalSala = (roomId: string) => `sala-${roomId}`;
 export const canalTrato = (roomId: string, handle: string) =>
   `trato-${roomId}-${handle.toLowerCase().replace(/[^a-z0-9]/g, "")}`;
+export const canalLobby = () => "lobby";
+
+/** Etapa 1.1 — un solo helper para las tres rutas que cambian `status`
+ *  (close, resolve, y el accept inmediato dentro de bids). Evita que se
+ *  desincronicen el shape del evento entre los tres call sites. */
+export function difundirLobby(evento: {
+  roomId: string;
+  status: "open" | "closing" | "sold";
+  highestBid?: number;
+  closesAt?: number | null;
+  finalPrice?: number;
+}): Promise<AckPublicacion | null> {
+  return publicar(canalLobby(), { t: "room_state", ...evento });
+}

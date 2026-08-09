@@ -3,7 +3,7 @@ import { pool } from "@/lib/db";
 import { decide, assertNoFloorLeak } from "@/lib/pricing";
 import { draft } from "@/lib/agent";
 import { mask } from "@/lib/mask";
-import { publicar, canalSala } from "@/lib/portal-server";
+import { publicar, canalSala, difundirLobby } from "@/lib/portal-server";
 
 export const dynamic = "force-dynamic";
 
@@ -231,6 +231,10 @@ export async function POST(req: Request) {
         winner: handle,
         finalPrice: decision.amount,
       });
+      // Etapa 1.1 — esta es la venta INMEDIATA (sin pasar por countdown de
+      // cierre): el home igual necesita enterarse, o la tarjeta se queda
+      // mostrando "abierta" hasta el próximo poll de 15s.
+      await difundirLobby({ roomId, status: "sold", finalPrice: decision.amount });
     }
 
     console.log(

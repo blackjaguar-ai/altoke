@@ -94,7 +94,7 @@ function Sala({ id, handle, distrito, esVendedor }: { id: string; handle: string
   const [enviando, setEnviando] = useState(false);
   const feedRef = useRef<HTMLDivElement>(null);
 
-  const s = useSala(id, handle, distrito, esVendedor ? "seller" : "buyer");
+  const s = useSala(id, handle, distrito, esVendedor ? "seller" : "bidder");
 
   useEffect(() => {
     const cargar = () => fetch(`/api/rooms/${id}`).then((r) => r.json()).then(setRoom).catch(() => {});
@@ -116,8 +116,11 @@ function Sala({ id, handle, distrito, esVendedor }: { id: string; handle: string
     (room.status === "sold"
       ? { finalPrice: Number(room.final_price), winner: room.winner_handle ?? undefined }
       : null);
-  const persistentes = s.eventos.filter((e) => !e.ephemeral && e.c.t !== "agent_typing");
-  const reacciones = s.eventos.filter((e) => e.c.t === "reaction" && Date.now() - e.ts < 2500);
+  // Ya no hay "agent_typing" ni "reaction" en s.eventos - ambos vivían en
+  // mensajes ephemeral que el SDK nunca entregaba (ver nota en
+  // lib/portal-client.tsx). eventos ahora solo trae contenido persistente,
+  // así que ya no hace falta filtrar nada acá.
+  const persistentes = s.eventos;
 
   // Quién puede ver el canal privado (HU-05): el vendedor siempre, y el
   // comprador SOLO si su handle coincide con el que ganó. Nadie más - ni
@@ -183,11 +186,14 @@ function Sala({ id, handle, distrito, esVendedor }: { id: string; handle: string
 
         <div className="mt-3 flex items-center gap-2 text-xs">
           <span className={`h-2 w-2 rounded-full ${s.status === "ready" ? "bg-loro" : "bg-naranja"}`} />
-          <span className="font-bold text-papel/70">{s.cuantos} negociando ahora</span>
+          <span className="font-bold text-papel/70">
+            {s.cuantos} negociando{s.cuantosMirando > 0 ? ` · ${s.cuantosMirando} mirando` : ""}
+          </span>
+          {!esVendedor && !vendido && <Interes roomId={id} handle={handle} />}
           <div className="ml-auto flex -space-x-2">
             {s.participantes.slice(0, 6).map((p) => (
               <span key={p.id} title={p.handle}
-                className="grid h-7 w-7 place-items-center rounded-full border-2 border-tinta bg-fucsia text-[11px] font-black text-tinta">
+                className={`grid h-7 w-7 place-items-center rounded-full border-2 border-tinta text-[11px] font-black text-tinta ${p.role === "spectator" ? "bg-papel/30" : "bg-fucsia"}`}>
                 {p.handle.slice(0, 2).toUpperCase()}
               </span>
             ))}
@@ -214,9 +220,9 @@ function Sala({ id, handle, distrito, esVendedor }: { id: string; handle: string
         )}
 
         <div className="pointer-events-none absolute inset-x-0 bottom-0 flex justify-center gap-4">
-          {reacciones.map((e) => (
-            <span key={e.id} className="reaccion text-4xl">
-              {e.c.t === "reaction" ? e.c.emoji : ""}
+          {s.reacciones.map((r) => (
+            <span key={r.id} className="reaccion text-4xl">
+              {r.emoji}
             </span>
           ))}
         </div>
@@ -242,7 +248,7 @@ function Sala({ id, handle, distrito, esVendedor }: { id: string; handle: string
           </p>
         ) : (
           <>
-            <div className="mb-2 flex gap-2">
+            <div className="mb-2 flex items-center gap-2">
               {EMOJIS.map((x) => (
                 <button key={x} onClick={() => s.reaccionar(x)} aria-label={`Reaccionar ${x}`}
                   className="borde bg-papel/10 px-3 py-1 text-xl">{x}</button>
@@ -254,28 +260,94 @@ function Sala({ id, handle, distrito, esVendedor }: { id: string; handle: string
                 placeholder="Escribe algo…"
                 className="borde min-w-0 flex-1 bg-papel/10 px-3 py-1 text-sm outline-none"
               />
-            </div>
-            <div className="flex gap-2">
-              <div className="borde flex flex-1 items-center bg-papel px-3">
-                <span className="display text-xl text-tinta/50">S/</span>
-                <input
-                  inputMode="numeric" value={monto}
-                  onChange={(e) => { setMonto(e.target.value.replace(/\D/g, "")); s.sendTyping(); }}
-                  onKeyDown={(e) => e.key === "Enter" && ofertar()}
-                  placeholder={String(Math.max(maximo + 20, Math.round(lista * 0.6)))}
-                  className="w-full bg-transparent px-2 py-3 text-2xl font-black text-tinta outline-none"
-                />
-              </div>
-              <button onClick={ofertar} disabled={enviando}
-                className="borde bg-fucsia px-5 display text-xl text-tinta disabled:opacity-50">
-                {enviando ? "…" : "Ofertar"}
+              {/* Etapa 1.2 — cualquiera puede pasar de espectador a ofertante
+                 y viceversa en cualquier momento (setMetadata en vivo, no
+                 reconecta). El toggle vive acá, siempre visible junto al
+                 chat, sea cual sea el modo actual. */}
+              <button
+                onClick={() => s.cambiarRol(s.rol === "spectator" ? "bidder" : "spectator")}
+                title={s.rol === "spectator" ? "Pasar a ofertante" : "Pasar a espectador"}
+                className="borde shrink-0 bg-papel/10 px-3 py-1 text-lg"
+              >
+                {s.rol === "spectator" ? "👁️" : "💰"}
               </button>
             </div>
+
+            {s.rol === "spectator" ? (
+              <button
+                onClick={() => s.cambiarRol("bidder")}
+                className="borde w-full bg-papel/10 px-4 py-3 text-center text-sm font-bold uppercase tracking-widest text-papel/60"
+              >
+                Estás mirando · toca para ofertar
+              </button>
+            ) : (
+              <div className="flex gap-2">
+                <div className="borde flex flex-1 items-center bg-papel px-3">
+                  <span className="display text-xl text-tinta/50">S/</span>
+                  <input
+                    inputMode="numeric" value={monto}
+                    onChange={(e) => { setMonto(e.target.value.replace(/\D/g, "")); s.sendTyping(); }}
+                    onKeyDown={(e) => e.key === "Enter" && ofertar()}
+                    placeholder={String(Math.max(maximo + 20, Math.round(lista * 0.6)))}
+                    className="w-full bg-transparent px-2 py-3 text-2xl font-black text-tinta outline-none"
+                  />
+                </div>
+                <button onClick={ofertar} disabled={enviando}
+                  className="borde bg-fucsia px-5 display text-xl text-tinta disabled:opacity-50">
+                  {enviando ? "…" : "Ofertar"}
+                </button>
+              </div>
+            )}
             {error && <p className="mt-2 text-sm font-bold text-fucsia">{error}</p>}
           </>
         )}
       </footer>
     </main>
+  );
+}
+
+/** Botón de interés (Etapa 1.5). Toggle idempotente, propio estado - no
+ *  necesita pasar por el hook de la sala. Trae el estado inicial por GET
+ *  (no localStorage: el corazón vive en Postgres por sala+handle, así que
+ *  sobrevive a un refresh en OTRO dispositivo si algún día hay cuentas). */
+function Interes({ roomId, handle }: { roomId: string; handle: string }) {
+  const [interesado, setInteresado] = useState(false);
+  const [cuenta, setCuenta] = useState(0);
+  const [cargando, setCargando] = useState(false);
+
+  useEffect(() => {
+    fetch(`/api/rooms/${roomId}/interest?handle=${encodeURIComponent(handle)}`)
+      .then((r) => r.json())
+      .then((j) => { setInteresado(Boolean(j.interested)); setCuenta(Number(j.count) || 0); })
+      .catch(() => {});
+  }, [roomId, handle]);
+
+  async function toggle() {
+    if (cargando) return;
+    setCargando(true);
+    try {
+      const res = await fetch(`/api/rooms/${roomId}/interest`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ handle }),
+      });
+      const j = await res.json();
+      setInteresado(Boolean(j.interested));
+      setCuenta(Number(j.count) || 0);
+    } finally {
+      setCargando(false);
+    }
+  }
+
+  return (
+    <button
+      onClick={toggle}
+      title="Avísame cuando esta sala vaya a cerrar"
+      className={`flex items-center gap-1 border-2 border-tinta px-2 py-1 text-xs font-black ${interesado ? "bg-fucsia text-tinta" : "bg-papel/10"}`}
+    >
+      <span>{interesado ? "❤️" : "🤍"}</span>
+      {cuenta > 0 && <span>{cuenta}</span>}
+    </button>
   );
 }
 

@@ -16,3 +16,8 @@ export const canalSala = (roomId: string) => `sala-${roomId}`;
 /** Canal privado post-cierre. Plantilla `trato-*`, anonymous: true. */
 export const canalTrato = (roomId: string, handle: string) =>
   `trato-${roomId}-${handle.toLowerCase().replace(/[^a-z0-9]/g, "")}`;
+/** Canal único, global, de solo transiciones de estado (Etapa 1.1). El home
+ *  lo escucha para actualizarse sin refresh. Nunca lleva ofertas ni chat -
+ *  solo `{t:"room_state", ...}`, así que su volumen es bajísimo aunque haya
+ *  muchas salas activas a la vez. */
+export const canalLobby = () => "lobby";

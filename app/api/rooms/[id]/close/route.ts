@@ -1,5 +1,5 @@
 import { pool } from "@/lib/db";
-import { publicar, canalSala } from "@/lib/portal-server";
+import { publicar, canalSala, difundirLobby } from "@/lib/portal-server";
 
 export const dynamic = "force-dynamic";
 
@@ -51,12 +51,29 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
     const highestBid = Number(res.rows[0].highest_bid);
     const highestHandle = res.rows[0].highest_handle as string | null;
 
+    // Etapa 1.5 — presión social real con lo que sí podemos verificar: un
+    // anuncio público en la sala con el conteo de corazones. Lo que NO
+    // hacemos es prometer una notificación push al celular vía Portal
+    // Inbox para gente anónima que no está conectada - la identidad anon
+    // de Portal no está confirmada como estable entre sesiones/pestañas
+    // distintas, y una promesa de "te avisamos" que a veces no llega es
+    // peor que no hacerla. Quien tiene la pestaña abierta (esta sala o el
+    // home) sí recibe el aviso en vivo, eso es lo que garantizamos.
+    const interesados = Number(
+      (await client.query(`select count(*)::int as n from interests where room_id = $1`, [roomId]))
+        .rows[0].n,
+    );
+
+    const sufijoInteres = interesados > 0 ? ` ${interesados} personas se anotaron con el corazón.` : "";
     const texto = highestBid > 0
-      ? `Cerramos en ${seconds} segundos. Mejor oferta ahora: S/${highestBid}. Última oportunidad para subir.`
-      : `Cerramos en ${seconds} segundos. Todavía nadie ha ofertado - no se cierra sin oferta.`;
+      ? `Cerramos en ${seconds} segundos. Mejor oferta ahora: S/${highestBid}. Última oportunidad para subir.${sufijoInteres}`
+      : `Cerramos en ${seconds} segundos. Todavía nadie ha ofertado - no se cierra sin oferta.${sufijoInteres}`;
 
     await publicar(canalSala(roomId), { t: "state", status: "closing", closesAt });
     await publicar(canalSala(roomId), { t: "agent", action: "hold", amount: null, text: texto });
+    // Etapa 1.1 — el home escucha esto para actualizar el badge de la
+    // tarjeta sin que el jurado tenga que refrescar la página.
+    await difundirLobby({ roomId, status: "closing", closesAt, highestBid: highestBid || undefined });
 
     console.log(`[close] room=${roomId} seconds=${seconds} highest=${highestBid} handle=${highestHandle ?? "-"}`);
     return Response.json({ ok: true, closesAt, status: "closing" });

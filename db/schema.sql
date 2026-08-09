@@ -40,3 +40,24 @@ CREATE TABLE IF NOT EXISTS agent_msgs (
   latency_ms INT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+-- Etapa 1.4 — moderación con memoria. Escopeado a (room_id, handle): no hay
+-- cuentas persistentes todavía (HU-04 sigue siendo anónimo), así que un
+-- baneo es por sala, no global. El middleware en portal.config.ts consulta
+-- y escribe acá vía HTTP, nunca directo a Postgres (vive en el edge).
+CREATE TABLE IF NOT EXISTS strikes (
+  room_id    TEXT NOT NULL,
+  handle     TEXT NOT NULL,
+  count      INT NOT NULL DEFAULT 0,
+  banned     BOOLEAN NOT NULL DEFAULT false,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  PRIMARY KEY (room_id, handle)
+);
+
+-- Etapa 1.5 — botón de interés (corazón). Toggle idempotente por handle.
+CREATE TABLE IF NOT EXISTS interests (
+  room_id    TEXT NOT NULL,
+  handle     TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  PRIMARY KEY (room_id, handle)
+);

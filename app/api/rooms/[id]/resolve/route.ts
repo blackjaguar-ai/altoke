@@ -1,5 +1,5 @@
 import { pool } from "@/lib/db";
-import { publicar, canalSala } from "@/lib/portal-server";
+import { publicar, canalSala, difundirLobby } from "@/lib/portal-server";
 
 export const dynamic = "force-dynamic";
 
@@ -46,6 +46,9 @@ export async function POST(_req: Request, ctx: { params: Promise<{ id: string }>
         winner: winner_handle,
         finalPrice,
       });
+      // Etapa 1.1 — saca la sala del grid principal del home y la manda a
+      // "Últimas ventas" sin que nadie tenga que refrescar.
+      await difundirLobby({ roomId, status: "sold", finalPrice });
 
       console.log(`[resolve] room=${roomId} sold winner=${winner_handle} price=${finalPrice}`);
       return Response.json({ ok: true, status: "sold", winner: winner_handle, finalPrice });
@@ -67,6 +70,8 @@ export async function POST(_req: Request, ctx: { params: Promise<{ id: string }>
         amount: null,
         text: "Se acabó el tiempo sin ofertas. Seguimos abiertos, manda tu oferta.",
       });
+      // Etapa 1.1 — vuelve a "abierta" en el home, sin refresh.
+      await difundirLobby({ roomId, status: "open", closesAt: null });
       console.log(`[resolve] room=${roomId} reopened, sin ofertas`);
       return Response.json({ ok: true, status: "open" });
     }
