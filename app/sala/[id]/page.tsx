@@ -73,28 +73,28 @@ function Entrada(p: {
 }) {
   const listo = p.handle.trim().length >= 2;
   return (
-    <main className="mx-auto flex min-h-dvh max-w-md flex-col justify-center gap-5 p-6">
-      <h1 className="display text-5xl leading-none text-amarillo dura">Entra a<br />la sala</h1>
-      <p className="text-papel/70">Sin cuenta, sin correo. Solo tu nombre.</p>
+    <main className="altoke-room mx-auto flex min-h-[100svh] max-w-lg flex-col justify-center gap-5 bg-altoke-bg p-6 font-sans text-altoke-ink md:min-h-[calc(100svh-2rem)] md:rounded-[32px] md:my-4">
+      <h1 className="text-5xl font-black leading-none text-white">Entra a<br />la sala</h1>
+      <p className="text-altoke-ink-soft">Sin cuenta, sin correo. Solo tu nombre.</p>
       <input
         autoFocus value={p.handle} maxLength={24}
         onChange={(e) => p.setHandle(e.target.value)}
         onKeyDown={(e) => e.key === "Enter" && listo && p.onEntrar()}
         placeholder="¿Cómo te llamamos?"
-        className="borde w-full bg-papel px-4 py-4 text-xl font-bold text-tinta outline-none focus:ring-4 focus:ring-fucsia"
+        className="altoke-inset w-full rounded-[20px] px-4 py-4 text-xl font-bold text-altoke-ink outline-none placeholder:text-altoke-ink-soft"
       />
-      <label className="text-sm font-semibold uppercase tracking-widest text-papel/60">
+      <label className="text-xs font-bold uppercase tracking-widest text-altoke-ink-soft">
         ¿De qué distrito eres?
       </label>
       <select
         value={p.distrito} onChange={(e) => p.setDistrito(e.target.value)}
-        className="borde w-full bg-papel px-4 py-3 font-bold text-tinta outline-none focus:ring-4 focus:ring-fucsia"
+        className="altoke-inset w-full rounded-[20px] px-4 py-3 font-bold text-altoke-ink outline-none"
       >
         {DISTRITOS.map((d) => <option key={d}>{d}</option>)}
       </select>
       <button
         disabled={!listo} onClick={p.onEntrar}
-        className="borde bg-amarillo px-6 py-5 display text-2xl text-tinta disabled:opacity-40"
+        className="altoke-bid-button w-full rounded-[20px] py-5 text-xl disabled:opacity-40"
       >
         Entrar a negociar
       </button>

@@ -180,7 +180,7 @@ export function AuctionRoom({
           </div>
         </div>
 
-        <div className="altoke-product-carousel absolute inset-x-4 top-36 h-24 overflow-hidden rounded-[24px] md:left-6 md:right-auto md:top-40 md:w-80">
+        <div className="altoke-product-carousel absolute inset-x-4 top-36 h-24 overflow-hidden rounded-[24px] md:left-6 md:right-auto md:top-40 md:w-full md:max-w-md">
           <Image src={room.photos[activePhoto]} alt={`${room.productName}, foto ${activePhoto + 1} de ${room.photos.length}`} fill sizes="(max-width: 768px) calc(100vw - 32px), 320px" className="object-cover" />
           {room.photos.length > 1 && (
             <>

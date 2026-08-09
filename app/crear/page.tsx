@@ -84,25 +84,25 @@ export default function CrearSalaPage() {
   }
 
   return (
-    <main className="mx-auto flex min-h-dvh max-w-md flex-col gap-4 p-6">
-      <h1 className="display text-4xl leading-none text-amarillo dura">
+    <main className="altoke-room mx-auto flex min-h-[100svh] max-w-lg flex-col gap-4 bg-altoke-bg p-6 font-sans text-altoke-ink md:min-h-[calc(100svh-2rem)] md:rounded-[32px] md:my-4">
+      <h1 className="text-4xl font-black leading-none text-white">
         Crea tu<br />sala
       </h1>
-      <p className="text-sm text-papel/70">
+      <p className="text-sm text-altoke-ink-soft">
         El precio piso es privado - nunca lo va a ver ningún comprador, ni en
         el chat ni en ningún payload.
       </p>
 
-      <label className="text-xs font-bold uppercase tracking-widest text-papel/60">Producto</label>
+      <label className="text-xs font-bold uppercase tracking-widest text-altoke-ink-soft">Producto</label>
       <input
         value={productName}
         onChange={(e) => setProductName(e.target.value)}
         placeholder="Ej: Bicicleta Monark aro 26"
         maxLength={80}
-        className="borde w-full bg-papel px-4 py-3 font-bold text-tinta outline-none focus:ring-4 focus:ring-fucsia"
+        className="altoke-inset w-full rounded-[20px] px-4 py-3 font-bold text-altoke-ink outline-none placeholder:text-altoke-ink-soft"
       />
 
-      <label className="text-xs font-bold uppercase tracking-widest text-papel/60">
+      <label className="text-xs font-bold uppercase tracking-widest text-altoke-ink-soft">
         Descripción (el agente la usa para negociar mejor)
       </label>
       <textarea
@@ -111,40 +111,40 @@ export default function CrearSalaPage() {
         placeholder="Ej: Poco uso, llantas nuevas, la compré hace 6 meses..."
         maxLength={500}
         rows={4}
-        className="borde w-full bg-papel px-4 py-3 text-sm text-tinta outline-none focus:ring-4 focus:ring-fucsia"
+        className="altoke-inset w-full rounded-[20px] px-4 py-3 text-sm text-altoke-ink outline-none placeholder:text-altoke-ink-soft"
       />
 
-      <label className="text-xs font-bold uppercase tracking-widest text-papel/60">Categoría</label>
+      <label className="text-xs font-bold uppercase tracking-widest text-altoke-ink-soft">Categoría</label>
       <select
         value={category}
         onChange={(e) => setCategory(e.target.value)}
-        className="borde w-full bg-papel px-4 py-3 font-bold text-tinta outline-none focus:ring-4 focus:ring-fucsia"
+        className="altoke-inset w-full rounded-[20px] px-4 py-3 font-bold text-altoke-ink outline-none"
       >
         {CATEGORIAS.map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}
       </select>
 
       <div className="flex gap-3">
         <div className="flex-1">
-          <label className="text-xs font-bold uppercase tracking-widest text-papel/60">Precio lista</label>
+          <label className="text-xs font-bold uppercase tracking-widest text-altoke-ink-soft">Precio lista</label>
           <input
             inputMode="numeric" value={listPrice}
             onChange={(e) => setListPrice(e.target.value.replace(/\D/g, ""))}
             placeholder="500"
-            className="borde mt-1 w-full bg-papel px-4 py-3 font-bold text-tinta outline-none focus:ring-4 focus:ring-fucsia"
+            className="altoke-inset mt-1 w-full rounded-[20px] px-4 py-3 font-bold text-altoke-ink outline-none placeholder:text-altoke-ink-soft"
           />
         </div>
         <div className="flex-1">
-          <label className="text-xs font-bold uppercase tracking-widest text-papel/60">Precio piso</label>
+          <label className="text-xs font-bold uppercase tracking-widest text-altoke-ink-soft">Precio piso</label>
           <input
             inputMode="numeric" value={floorPrice}
             onChange={(e) => setFloorPrice(e.target.value.replace(/\D/g, ""))}
             placeholder="350"
-            className="borde mt-1 w-full bg-papel px-4 py-3 font-bold text-tinta outline-none focus:ring-4 focus:ring-fucsia"
+            className="altoke-inset mt-1 w-full rounded-[20px] px-4 py-3 font-bold text-altoke-ink outline-none placeholder:text-altoke-ink-soft"
           />
         </div>
       </div>
 
-      <label className="text-xs font-bold uppercase tracking-widest text-papel/60">
+      <label className="text-xs font-bold uppercase tracking-widest text-altoke-ink-soft">
         Fotos ({fotos.length}/{MAX_FOTOS})
       </label>
       <input
@@ -153,17 +153,17 @@ export default function CrearSalaPage() {
         accept="image/jpeg,image/png,image/webp"
         multiple
         onChange={(e) => { agregarFotos(e.target.files); e.target.value = ""; }}
-        className="text-sm text-papel/70"
+        className="text-sm text-altoke-ink-soft"
       />
       {fotos.length > 0 && (
         <div className="flex flex-wrap gap-2">
           {fotos.map((f, i) => (
             <div key={i} className="relative">
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={URL.createObjectURL(f)} alt="" className="h-20 w-20 object-cover borde" />
+              <img src={URL.createObjectURL(f)} alt="" className="h-20 w-20 rounded-[14px] object-cover" />
               <button
                 onClick={() => quitarFoto(i)}
-                className="absolute -right-2 -top-2 grid h-6 w-6 place-items-center rounded-full bg-fucsia text-xs font-black text-tinta"
+                className="absolute -right-2 -top-2 grid h-6 w-6 place-items-center rounded-full bg-altoke-live text-xs font-black text-altoke-action-ink"
               >
                 ×
               </button>
@@ -172,12 +172,12 @@ export default function CrearSalaPage() {
         </div>
       )}
 
-      {error && <p className="text-sm font-bold text-fucsia">{error}</p>}
+      {error && <p className="text-sm font-bold text-altoke-live">{error}</p>}
 
       <button
         onClick={crear}
         disabled={enviando}
-        className="borde mt-2 bg-amarillo px-6 py-5 display text-2xl text-tinta disabled:opacity-40"
+        className="altoke-bid-button mt-2 w-full rounded-[20px] py-5 text-2xl disabled:opacity-40"
       >
         {enviando ? "Creando…" : "Crear sala"}
       </button>

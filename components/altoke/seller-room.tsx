@@ -134,7 +134,7 @@ export function SellerRoom({ room, seller, bids, messages, onClose, privateChat 
            clases (.altoke-product-carousel, .altoke-carousel-*). El
            vendedor necesita ver su propio producto con la misma claridad
            que cualquier comprador. */}
-        <div className="altoke-product-carousel absolute inset-x-4 top-36 h-24 overflow-hidden rounded-[24px] md:left-6 md:right-auto md:top-40 md:w-80">
+        <div className="altoke-product-carousel absolute inset-x-4 top-36 h-24 overflow-hidden rounded-[24px] md:left-6 md:right-auto md:top-40 md:w-full md:max-w-md">
           <Image src={room.photos[activePhoto] ?? room.photos[0]} alt={`${room.productName}, foto ${activePhoto + 1} de ${room.photos.length}`} fill sizes="(max-width: 768px) calc(100vw - 32px), 320px" className="object-cover" />
           {room.photos.length > 1 && (
             <>
