@@ -143,6 +143,14 @@ body {
   backdrop-filter: blur(12px);
 }
 .altoke-tab-active { color: var(--ink); box-shadow: var(--neu-in); }
+/* Carrusel de producto — agregado junto con seller-room.tsx; el patrón es
+   copia literal del que v0 generó en su iteración v3 de auction-room.tsx. */
+.altoke-product-carousel { background: var(--bg); box-shadow: var(--neu-out); }
+.altoke-carousel-arrow { position: absolute; top: 50%; display: grid; width: 30px; height: 30px; translate: 0 -50%; place-items: center; border: 0; border-radius: 999px; background: color-mix(in srgb, var(--bg) 82%, transparent); color: var(--ink); box-shadow: 0 2px 8px rgba(0, 0, 0, .3); backdrop-filter: blur(8px); }
+.altoke-carousel-arrow svg { width: 16px; height: 16px; }
+.altoke-carousel-dots { position: absolute; right: 0; bottom: 7px; left: 0; display: flex; justify-content: center; gap: 5px; }
+.altoke-carousel-dots button { width: 6px; height: 6px; border: 0; border-radius: 999px; background: rgba(255, 255, 255, .5); padding: 0; box-shadow: 0 1px 3px rgba(0, 0, 0, .3); transition: width .2s ease, background .2s ease; }
+.altoke-carousel-dots .altoke-carousel-dot-active { width: 16px; background: #ffffff; }
 .chat-fade { mask-image: linear-gradient(to bottom, transparent 0%, black 22%, black 100%); padding-top: 24px; }
 .altoke-message-input {
   margin-top: 4px;

@@ -21,7 +21,8 @@ type MarketplaceHomeProps = {
    * no traía ningún onClick en sus 4 botones (puramente decorativos). Es
    * un cambio mecánico de una línea, sin tocar diseño ni estructura, así
    * que no ameritaba otra ronda completa de v0 - se documenta acá para
-   * que quede claro qué se tocó y por qué.
+   * que quede claro qué se tocó y por qué. Reaplicado tras sobrescribir
+   * este archivo con la versión nueva del carrusel (v3).
    */
   onNavigateVender?: () => void
 }
@@ -31,7 +32,7 @@ const money = new Intl.NumberFormat('es-PE', { maximumFractionDigits: 0 })
 function RoomImage({ room, sizes }: { room: Room; sizes: string }) {
   return (
     <div className="home-room-media">
-      <Image src={room.photoUrl} alt={room.productName} fill sizes={sizes} className="object-cover" />
+      <Image src={room.photos[0]} alt={room.productName} fill sizes={sizes} className="object-cover" />
       <span className="home-live-pill">EN VIVO · {room.spectatorCount}</span>
       <span className="home-heat-track" aria-label={`Nivel de actividad ${room.heat}%`}>
         <span style={{ width: `${Math.min(100, room.heat)}%` }} />
@@ -154,7 +155,7 @@ export function MarketplaceHome({ rooms, categories, activeCategory, onSelectCat
             <ul className="flex flex-col gap-3 pt-4">
               {soldRooms.map((room) => (
                 <li key={room.id} className="home-sale-row">
-                  <Image src={room.photoUrl} alt="" width={40} height={40} className="size-10 rounded-xl object-cover" />
+                  <Image src={room.photos[0]} alt="" width={40} height={40} className="size-10 rounded-xl object-cover" />
                   <span className="min-w-0 flex-1 truncate text-sm font-semibold">{room.productName}</span>
                   <strong className="font-mono text-sm tabular-nums text-altoke-sold">S/ {money.format(room.finalPrice ?? room.highestBid ?? room.listPrice)}</strong>
                 </li>

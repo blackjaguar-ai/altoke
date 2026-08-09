@@ -54,10 +54,14 @@ function categoriaValida(c: string): Room["category"] {
 function salaARoom(s: SalaCard): Room {
   const lista = Number(s.list_price);
   const max = Number(s.highest_bid);
+  // El home solo trae photo_url (una sola foto) por diseño - no necesita
+  // el arreglo completo de room_photos, ni MarketplaceHome pinta más de
+  // una foto por tarjeta. El tipo Room exige un tuple no vacío igual, así
+  // que se envuelve en un arreglo de un solo elemento.
   return {
     id: s.id,
     productName: s.product_name,
-    photoUrl: s.photo_url ?? FOTO_VACIA,
+    photos: [s.photo_url ?? FOTO_VACIA],
     listPrice: lista,
     highestBid: max || null,
     category: categoriaValida(s.category),
@@ -76,7 +80,7 @@ function ventaARoom(v: VentaCard): Room {
   return {
     id: v.id,
     productName: v.product_name,
-    photoUrl: v.photo_url ?? FOTO_VACIA,
+    photos: [v.photo_url ?? FOTO_VACIA],
     listPrice: precio,
     highestBid: precio,
     category: "otros",
